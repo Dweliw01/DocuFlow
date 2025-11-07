@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocuFlow - AI Document Processing</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <svg class="brand-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="url(#gradient)"/>
+                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#6366f1"/>
+                            <stop offset="100%" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="brand-name">DocuFlow</span>
+            </div>
+            <div class="nav-links">
+                <span class="nav-status">
+                    <span class="status-dot"></span>
+                    System Online
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="app-container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1 class="hero-title">AI-Powered Document Processing</h1>
+                <p class="hero-subtitle">Upload your documents and let our AI organize them automatically with advanced OCR and intelligent data extraction</p>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+        <section class="upload-section" id="uploadSection">
+            <div class="section-container">
+                <div class="upload-zone" id="uploadBox">
+                    <div class="upload-zone-content">
+                        <div class="upload-icon-wrapper">
+                            <svg class="upload-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+                                <circle cx="32" cy="32" r="30" fill="#f0f4ff" stroke="#6366f1" stroke-width="2" stroke-dasharray="4 4"/>
+                                <path d="M32 20v24M20 32h24" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
+                                <path d="M26 26l6-6 6 6" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <h3 class="upload-title">Drop your PDF files here</h3>
+                        <p class="upload-description">or click to browse from your computer</p>
+                        <div class="upload-specs">
+                            <span class="spec-item">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm.93 9.412l-2.29 2.29a.996.996 0 11-1.41-1.41L7.59 8l-2.36-2.29a.996.996 0 111.41-1.41l2.29 2.29 2.29-2.29a.996.996 0 111.41 1.41L10.41 8l2.29 2.29a.996.996 0 11-1.41 1.41l-2.36-2.29z"/>
+                                </svg>
+                                PDF files only
+                            </span>
+                            <span class="spec-item">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"/>
+                                </svg>
+                                Max 50MB per file
+                            </span>
+                            <span class="spec-item">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"/>
+                                </svg>
+                                Up to 100 files
+                            </span>
+                        </div>
+                        <input type="file" id="fileInput" multiple accept=".pdf" hidden>
+                        <button id="browseBtn" class="btn btn-primary btn-lg">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M16.88 9.94L11 4.06a1 1 0 00-1.41 0L4 9.94a1 1 0 001.41 1.41L9 7.77V16a1 1 0 002 0V7.77l3.47 3.58a1 1 0 001.41-1.41z"/>
+                            </svg>
+                            Browse Files
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Files -->
+                <div id="fileList" class="file-list hidden"></div>
+
+                <!-- Upload Actions -->
+                <div id="uploadControls" class="upload-actions hidden">
+                    <button id="uploadBtn" class="btn btn-primary btn-xl">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                        </svg>
+                        Process Documents
+                    </button>
+                    <button id="clearBtn" class="btn btn-secondary">Clear All</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Processing Section -->
+        <section id="processingSection" class="processing-section hidden">
+            <div class="section-container">
+                <div class="processing-card">
+                    <div class="processing-header">
+                        <div class="spinner"></div>
+                        <h2>Processing Your Documents</h2>
+                        <p id="processingStatus">Initializing AI engine...</p>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill"></div>
+                        </div>
+                    </div>
+                    <div id="processingDetails" class="processing-log"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="results-section hidden">
+            <div class="section-container">
+                <div class="results-header">
+                    <div class="results-icon">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                            <circle cx="24" cy="24" r="24" fill="#d1fae5"/>
+                            <path d="M14 24l8 8 16-16" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h2 class="results-title">Processing Complete</h2>
+                    <p class="results-subtitle">Your documents have been organized and data has been extracted</p>
+                </div>
+
+                <!-- Summary Stats -->
+                <div id="resultsSummary" class="stats-grid"></div>
+
+                <!-- Results -->
+                <div id="resultsDetails" class="results-content"></div>
+
+                <!-- Actions -->
+                <div class="results-actions">
+                    <button id="downloadBtn" class="btn btn-primary btn-xl">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/>
+                        </svg>
+                        Download Organized Documents
+                    </button>
+                    <button id="newBatchBtn" class="btn btn-secondary">Process New Batch</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <svg class="footer-icon" width="24" height="24" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="url(#gradient2)"/>
+                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient2" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#6366f1"/>
+                            <stop offset="100%" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>DocuFlow</span>
+            </div>
+            <div class="footer-text">
+                Powered by Claude AI & Tesseract OCR • Secure • Fast • Reliable
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js?v=6"></script>
+</body>
+</html>

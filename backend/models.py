@@ -2,7 +2,7 @@
 Data models for the Document Digitization MVP.
 Uses Pydantic for data validation and serialization.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any
 from enum import Enum
 from datetime import datetime
@@ -60,6 +60,13 @@ class ExtractedData(BaseModel):
     line_items: Optional[List[LineItem]] = None  # Line items for invoices/receipts
     other_data: Optional[Dict[str, Any]] = Field(default_factory=dict)  # Any other relevant data
 
+    @validator('address', 'phone', 'email', pre=True)
+    def convert_list_to_string(cls, v):
+        """Convert lists to strings by joining with commas. AI sometimes returns multiple values."""
+        if isinstance(v, list):
+            return ', '.join(str(item) for item in v if item)
+        return v
+
 
 class ProcessingStatus(str, Enum):
     """
@@ -86,6 +93,7 @@ class DocumentResult(BaseModel):
     extracted_data: Optional[ExtractedData] = None  # Structured data extracted from document
     error: Optional[str] = None
     processing_time: float  # seconds
+    upload_result: Optional['UploadResult'] = None  # Result of connector upload (if configured)
 
     class Config:
         """Allow enum values in JSON responses"""
@@ -125,3 +133,118 @@ class BatchResultResponse(BaseModel):
     class Config:
         """Allow enum values in JSON responses"""
         use_enum_values = True
+
+
+# ============================================================================
+# Connector Models - Document Management System Integration
+# ============================================================================
+
+
+class ConnectorType(str, Enum):
+    """
+    Supported document management system connectors.
+    User selects ONE destination for document upload.
+    """
+    NONE = "none"
+    DOCUWARE = "docuware"
+    GOOGLE_DRIVE = "google_drive"
+    ONEDRIVE = "onedrive"
+
+
+class FileCabinet(BaseModel):
+    """
+    DocuWare file cabinet (or equivalent storage location in other systems).
+    """
+    id: str
+    name: str
+    description: Optional[str] = None
+
+
+class StorageDialog(BaseModel):
+    """
+    DocuWare storage dialog (defines the entry form and fields).
+    """
+    id: str
+    name: str
+    description: Optional[str] = None
+
+
+class IndexField(BaseModel):
+    """
+    Document index field in DocuWare (metadata field).
+    """
+    name: str
+    type: str  # Text, Date, Decimal, Integer, etc.
+    required: bool
+    max_length: Optional[int] = None
+    validation: Optional[str] = None
+
+
+class DocuWareConfig(BaseModel):
+    """
+    DocuWare connector configuration.
+    Stores connection details and field mapping.
+    """
+    server_url: str
+    username: str
+    encrypted_password: str
+    cabinet_id: str
+    cabinet_name: str
+    dialog_id: str
+    dialog_name: str
+    field_mapping: Dict[str, str]  # DocuFlow field -> DocuWare field
+
+
+class GoogleDriveConfig(BaseModel):
+    """
+    Google Drive connector configuration (future).
+    """
+    access_token: str
+    refresh_token: str
+    folder_id: Optional[str] = None
+    folder_name: Optional[str] = None
+
+
+class OneDriveConfig(BaseModel):
+    """
+    OneDrive connector configuration (future).
+    """
+    access_token: str
+    refresh_token: str
+    site_id: Optional[str] = None
+    folder_id: Optional[str] = None
+    folder_name: Optional[str] = None
+
+
+class ConnectorConfig(BaseModel):
+    """
+    Main connector configuration.
+    User selects one connector type and provides its configuration.
+    """
+    connector_type: ConnectorType
+    docuware: Optional[DocuWareConfig] = None
+    google_drive: Optional[GoogleDriveConfig] = None
+    onedrive: Optional[OneDriveConfig] = None
+
+    class Config:
+        """Allow enum values in JSON responses"""
+        use_enum_values = True
+
+
+class ConnectorTestResponse(BaseModel):
+    """
+    Response from testing a connector connection.
+    """
+    success: bool
+    message: str
+
+
+class UploadResult(BaseModel):
+    """
+    Result of uploading a document to a connector.
+    """
+    success: bool
+    document_id: Optional[str] = None
+    url: Optional[str] = None
+    message: str
+    error: Optional[str] = None

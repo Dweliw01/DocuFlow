@@ -6,7 +6,8 @@
       "Bash(conda env:*)",
       "Bash(set PYTHONPATH=%CD%)",
       "Bash(timeout:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

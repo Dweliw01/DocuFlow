@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from routes import upload
+from routes import connector_routes
 from config import settings
 import os
 
@@ -30,6 +31,7 @@ app.add_middleware(
 
 # Include API routes with /api prefix
 app.include_router(upload.router, prefix="/api", tags=["documents"])
+app.include_router(connector_routes.router, tags=["connectors"])
 
 # Serve frontend static files (HTML, CSS, JS)
 # This must come LAST to avoid overriding API routes
@@ -63,14 +65,14 @@ async def startup_event():
     Print configuration and status information.
     """
     print("\n" + "=" * 60)
-    print("📄 Document Digitization MVP")
+    print("Document Digitization MVP")
     print("=" * 60)
-    print(f"🌐 Server: http://{settings.host}:{settings.port}")
-    print(f"📚 API Docs: http://{settings.host}:{settings.port}/docs")
-    print(f"🤖 AI: Claude Haiku")
-    print(f"👁 OCR: {'Google Vision' if settings.use_google_vision else 'Tesseract (free)'}")
-    print(f"📁 Max file size: {settings.max_file_size}MB")
-    print(f"⚡ Concurrent processing: {settings.max_concurrent_processing}")
+    print(f"Server: http://{settings.host}:{settings.port}")
+    print(f"API Docs: http://{settings.host}:{settings.port}/docs")
+    print(f"AI: Claude Haiku")
+    print(f"OCR: {'Google Vision' if settings.use_google_vision else 'Tesseract (free)'}")
+    print(f"Max file size: {settings.max_file_size}MB")
+    print(f"Concurrent processing: {settings.max_concurrent_processing}")
     print("=" * 60 + "\n")
 
 

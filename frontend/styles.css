@@ -124,6 +124,29 @@ body {
     letter-spacing: -0.02em;
 }
 
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+}
+
+.nav-link {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--gray-600);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--primary-600);
+}
+
+.nav-link-active {
+    color: var(--primary-600);
+    font-weight: 600;
+}
+
 .nav-status {
     display: flex;
     align-items: center;

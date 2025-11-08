@@ -52,7 +52,7 @@ class Settings(BaseSettings):
         os.makedirs(self.processed_dir, exist_ok=True)
         os.makedirs(self.log_dir, exist_ok=True)
 
-        print(f"✓ Configuration loaded")
+        print(f"[OK] Configuration loaded")
         print(f"  - Upload directory: {self.upload_dir}")
         print(f"  - Processed directory: {self.processed_dir}")
         print(f"  - Using {self.claude_model} for AI categorization")

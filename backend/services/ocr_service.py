@@ -32,12 +32,12 @@ class OCRService:
             try:
                 from google.cloud import vision
                 self.vision_client = vision.ImageAnnotatorClient()
-                print("✓ Google Vision API initialized")
+                print("[OK] Google Vision API initialized")
             except Exception as e:
-                print(f"⚠ Google Vision API not available, falling back to Tesseract: {e}")
+                print(f"WARNING: Google Vision API not available, falling back to Tesseract: {e}")
                 self.use_google = False
         else:
-            print("✓ Using Tesseract OCR (free)")
+            print("[OK] Using Tesseract OCR (free)")
 
     async def extract_text_from_pdf(self, pdf_path: str) -> str:
         """

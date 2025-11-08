@@ -26,7 +26,7 @@ class FileService:
     def __init__(self):
         """Initialize file service with processed directory from settings."""
         self.processed_dir = settings.processed_dir
-        print("✓ File Service initialized")
+        print("[OK] File Service initialized")
 
     async def organize_documents(self, results: List[DocumentResult]) -> str:
         """

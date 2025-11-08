@@ -21,11 +21,16 @@ from models import (
     BatchResultResponse,
     DocumentResult,
     ProcessingStatus,
-    DocumentCategory
+    DocumentCategory,
+    ConnectorType,
+    UploadResult
 )
 from services.ocr_service import OCRService
 from services.ai_service import AIService
 from services.file_service import FileService
+from services.encryption_service import get_encryption_service
+from connectors.connector_manager import get_connector_manager
+from routes.connector_routes import get_current_config_with_decrypted_password
 from config import settings
 
 # Create API router
@@ -39,6 +44,8 @@ batch_results = {}
 ocr_service = OCRService()
 ai_service = AIService()
 file_service = FileService()
+encryption_service = get_encryption_service()
+connector_manager = get_connector_manager()
 
 
 @router.post("/upload", response_model=BatchUploadResponse)
@@ -171,6 +178,9 @@ async def process_batch(batch_id: str, file_paths: List[str]):
         print(f"Failed to organize documents: {e}")
         download_url = None
 
+    # Upload documents to configured connector (if any)
+    await upload_to_connector(processed_results)
+
     # Calculate statistics
     successful = sum(1 for r in processed_results if r.error is None)
     failed = len(processed_results) - successful
@@ -257,6 +267,71 @@ async def process_single_document(file_path: str) -> DocumentResult:
             error=str(e),
             processing_time=processing_time
         )
+
+
+async def upload_to_connector(results: List[DocumentResult]):
+    """
+    Upload processed documents to configured connector.
+    Only uploads successfully processed documents with extracted data.
+
+    Args:
+        results: List of DocumentResult objects to upload
+    """
+    # Get current connector configuration
+    config_tuple = get_current_config_with_decrypted_password()
+
+    if not config_tuple:
+        # No connector configured
+        print("No connector configured - skipping uploads")
+        return
+
+    config, decrypted_password = config_tuple
+
+    if config.connector_type == ConnectorType.NONE:
+        # Connector explicitly set to None
+        return
+
+    print(f"Uploading documents to {config.connector_type}...")
+
+    # Upload each successfully processed document
+    upload_count = 0
+    for result in results:
+        # Skip failed documents or documents without processed path
+        if result.error is not None or result.processed_path is None:
+            continue
+
+        # Skip documents without extracted data
+        if result.extracted_data is None:
+            print(f"Skipping {result.filename} - no extracted data")
+            continue
+
+        try:
+            # Upload to connector
+            upload_result = await connector_manager.upload_document(
+                file_path=result.processed_path,
+                extracted_data=result.extracted_data,
+                config=config,
+                decrypted_password=decrypted_password
+            )
+
+            # Store upload result
+            result.upload_result = upload_result
+
+            if upload_result.success:
+                upload_count += 1
+                print(f"✓ Uploaded {result.filename} to {config.connector_type}")
+            else:
+                print(f"✗ Failed to upload {result.filename}: {upload_result.error}")
+
+        except Exception as e:
+            print(f"✗ Upload error for {result.filename}: {str(e)}")
+            result.upload_result = UploadResult(
+                success=False,
+                message="Upload error",
+                error=str(e)
+            )
+
+    print(f"Connector upload completed: {upload_count}/{len(results)} documents uploaded")
 
 
 @router.get("/status/{batch_id}", response_model=BatchResultResponse)

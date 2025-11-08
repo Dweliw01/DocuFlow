@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - DocuFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <svg class="brand-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="url(#gradient)"/>
+                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#6366f1"/>
+                            <stop offset="100%" stop-color="#8b5cf6"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="brand-name">DocuFlow</span>
+            </div>
+
+            <div class="nav-links">
+                <a href="/" class="nav-link">Process Documents</a>
+                <a href="/settings.html" class="nav-link nav-link-active">Settings</a>
+                <span class="nav-status">
+                    <span class="status-dot"></span>
+                    System Online
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-container">
+        <!-- Header -->
+        <div class="settings-header">
+            <h1 class="settings-title">Settings</h1>
+            <p class="settings-subtitle">Configure your document management system integration</p>
+        </div>
+
+        <!-- Current Configuration Status (hidden by default) -->
+        <div id="current-config-display" class="settings-card" style="display: none;">
+            <div class="settings-section">
+                <div class="section-header">
+                    <h2 class="section-title">✓ Current Configuration</h2>
+                    <p class="section-description">Your active connector configuration</p>
+                </div>
+
+                <div class="config-summary">
+                    <div class="config-row">
+                        <span class="config-label">Connector Type:</span>
+                        <span id="current-connector-type" class="config-value"></span>
+                    </div>
+                    <div id="docuware-summary" style="display: none;">
+                        <div class="config-row">
+                            <span class="config-label">Server URL:</span>
+                            <span id="current-server-url" class="config-value"></span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">Username:</span>
+                            <span id="current-username" class="config-value"></span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">File Cabinet:</span>
+                            <span id="current-cabinet" class="config-value"></span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">Storage Dialog:</span>
+                            <span id="current-dialog" class="config-value"></span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">Field Mappings:</span>
+                            <span id="current-mappings-count" class="config-value"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-actions">
+                    <button id="edit-config-btn" class="btn btn-secondary">
+                        <span class="btn-icon">✏️</span>
+                        Edit Configuration
+                    </button>
+                    <button id="clear-config-btn" class="btn btn-danger">
+                        <span class="btn-icon">🗑️</span>
+                        Clear Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Card -->
+        <div class="settings-card">
+            <!-- Section: Upload Destination -->
+            <div class="settings-section">
+                <div class="section-header">
+                    <h2 class="section-title">📤 Upload Destination</h2>
+                    <p class="section-description">Choose where processed documents should be uploaded</p>
+                </div>
+
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="connector" value="none" checked>
+                        <div class="radio-content">
+                            <span class="radio-label">None (Local only)</span>
+                            <span class="radio-description">Store documents locally without uploading</span>
+                        </div>
+                    </label>
+
+                    <label class="radio-option">
+                        <input type="radio" name="connector" value="docuware">
+                        <div class="radio-content">
+                            <span class="radio-label">DocuWare</span>
+                            <span class="radio-description">Upload to DocuWare document management system</span>
+                        </div>
+                    </label>
+
+                    <label class="radio-option radio-option-disabled">
+                        <input type="radio" name="connector" value="google_drive" disabled>
+                        <div class="radio-content">
+                            <span class="radio-label">Google Drive</span>
+                            <span class="radio-description">Coming soon - Upload to Google Drive</span>
+                        </div>
+                    </label>
+
+                    <label class="radio-option radio-option-disabled">
+                        <input type="radio" name="connector" value="onedrive" disabled>
+                        <div class="radio-content">
+                            <span class="radio-label">OneDrive</span>
+                            <span class="radio-description">Coming soon - Upload to Microsoft OneDrive</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Section: DocuWare Configuration (hidden by default) -->
+            <div id="docuware-config" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">🔌 DocuWare Configuration</h2>
+                    <p class="section-description">Connect to your DocuWare instance</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Server URL</label>
+                    <input type="text" id="dw-server-url" class="form-input" placeholder="https://company.docuware.cloud">
+                    <span class="form-hint">Your DocuWare server URL (https:// will be added automatically)</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" id="dw-username" class="form-input" placeholder="user@company.com">
+                    <span class="form-hint">Your DocuWare username</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="dw-password" class="form-input" placeholder="••••••••">
+                    <span class="form-hint">Your DocuWare password (encrypted and stored securely)</span>
+                </div>
+
+                <button id="test-connection-btn" class="btn btn-secondary">
+                    <span class="btn-icon">🔌</span>
+                    Test Connection
+                </button>
+
+                <div id="connection-status" class="alert" style="display: none;"></div>
+            </div>
+
+            <!-- Section: File Cabinet Selection (hidden by default) -->
+            <div id="cabinet-selection" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">📁 File Cabinet Selection</h2>
+                    <p class="section-description">Select where documents should be stored</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">File Cabinet</label>
+                    <select id="dw-cabinet" class="form-select">
+                        <option value="">Select a file cabinet...</option>
+                    </select>
+                    <span class="form-hint">Target file cabinet for document storage</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Storage Dialog</label>
+                    <select id="dw-dialog" class="form-select" disabled>
+                        <option value="">Select a storage dialog...</option>
+                    </select>
+                    <span class="form-hint">Entry form used for indexing documents</span>
+                </div>
+
+                <button id="load-fields-btn" class="btn btn-secondary" disabled>
+                    <span class="btn-icon">🏷️</span>
+                    Load Index Fields
+                </button>
+            </div>
+
+            <!-- Section: Index Fields (hidden by default) -->
+            <div id="index-fields-section" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">🏷️ Detected Index Fields</h2>
+                    <p class="section-description">Available fields in the selected storage dialog</p>
+                </div>
+
+                <div id="fields-table-container">
+                    <!-- Fields table will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <!-- Section: Field Mapping (hidden by default) -->
+            <div id="field-mapping-section" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">🔗 Field Mapping</h2>
+                    <p class="section-description">Map DocuFlow extracted fields to DocuWare index fields</p>
+                </div>
+
+                <div id="field-mapping-container">
+                    <!-- Field mapping UI will be dynamically inserted here -->
+                </div>
+
+                <div id="mapping-warning" class="alert alert-warning" style="display: none;">
+                    <strong>⚠️ Warning:</strong> <span id="warning-text"></span>
+                </div>
+            </div>
+
+            <!-- Save Configuration Button -->
+            <div id="save-section" class="settings-section" style="display: none;">
+                <button id="save-config-btn" class="btn btn-primary btn-large">
+                    <span class="btn-icon">💾</span>
+                    Save Configuration
+                </button>
+            </div>
+        </div>
+
+        <!-- Success Message -->
+        <div id="success-message" class="alert alert-success" style="display: none;">
+            <strong>✓ Success!</strong> Configuration saved successfully. You can now process documents with automatic upload to DocuWare.
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <p class="footer-text">
+                Powered by <strong>Claude Haiku 4.5</strong> AI and <strong>Tesseract OCR</strong>
+            </p>
+            <p class="footer-links">
+                <a href="/" class="footer-link">Home</a>
+                <a href="/docs" class="footer-link">API Docs</a>
+                <a href="https://github.com/Dweliw01/DocuFlow" class="footer-link" target="_blank">GitHub</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="settings.js"></script>
+</body>
+</html>

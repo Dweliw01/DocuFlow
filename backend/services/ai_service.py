@@ -23,7 +23,7 @@ class AIService:
         """Initialize the AI service with Claude."""
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self.model = settings.claude_model
-        print(f"✓ AI Service initialized with {self.model}")
+        print(f"[OK] AI Service initialized with {self.model}")
 
     async def categorize_document(self, text: str, filename: str) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """

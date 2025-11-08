@@ -334,7 +334,13 @@ INSTRUCTIONS:
    - SHIP_DATE/DELIVERY_DATE: Shipping or delivery date
    - TERMS/PAYMENT_TERMS: Payment terms (e.g., "Net 30")
 
-6. Respond ONLY with valid JSON in this exact format (no other text):
+6. ADDITIONALLY, for invoices/receipts: Extract ALL line items with:
+   - description: Product/service description
+   - quantity: Quantity ordered
+   - unit_price: Price per unit
+   - amount: Line total
+
+7. Respond ONLY with valid JSON in this exact format (no other text):
 {{
     "category": "Category Name",
     "confidence": 0.95,
@@ -342,7 +348,15 @@ INSTRUCTIONS:
         "FIELD_NAME_1": "extracted value 1",
         "FIELD_NAME_2": "extracted value 2",
         "FIELD_NAME_3": null
-    }}
+    }},
+    "line_items": [
+        {{
+            "description": "Product Name",
+            "quantity": "10",
+            "unit_price": "$25.00",
+            "amount": "$250.00"
+        }}
+    ]
 }}
 
 DO NOT include markdown code blocks or any other formatting. Output only the JSON object."""
@@ -374,11 +388,63 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
             # Extract confidence
             confidence = float(data.get("confidence", 0.5))
 
-            # Extract fields - return as dict (not ExtractedData) since fields are dynamic
+            # Extract fields and map to ExtractedData structure
             extracted_fields = data.get("extracted_fields", {})
+            line_items_raw = data.get("line_items", [])
 
-            # Create a minimal ExtractedData with extracted fields in other_data
-            extracted_data = ExtractedData(other_data=extracted_fields)
+            # Map common DocuWare field names to ExtractedData fields for preview
+            # BUT ALSO keep them in other_data with original field names for DocuWare upload
+            mapped_data = {}
+            other_data = extracted_fields.copy()  # Keep all original fields for DocuWare
+
+            for field_name, value in extracted_fields.items():
+                field_upper = field_name.upper()
+
+                # Map vendor/supplier fields
+                if any(x in field_upper for x in ['VENDOR', 'SUPPLIER']):
+                    mapped_data['vendor'] = value
+                # Map client/customer fields
+                elif any(x in field_upper for x in ['CLIENT', 'CUSTOMER']):
+                    mapped_data['client'] = value
+                # Map amount fields
+                elif any(x in field_upper for x in ['AMOUNT', 'TOTAL']):
+                    mapped_data['amount'] = value
+                # Map invoice number fields
+                elif any(x in field_upper for x in ['INVOICE_NO', 'INVOICE_NUMBER', 'INV_NO']):
+                    mapped_data['document_number'] = value
+                # Map PO number fields
+                elif any(x in field_upper for x in ['PO_NUMBER', 'P_O_NUMBER', 'REFERENCE']):
+                    mapped_data['reference_number'] = value
+                # Map date fields
+                elif any(x in field_upper for x in ['ORDER_DATE', 'INVOICE_DATE', 'DOC_DATE']):
+                    mapped_data['date'] = value
+                elif 'DUE_DATE' in field_upper:
+                    mapped_data['due_date'] = value
+                # Map address fields
+                elif 'ADDRESS' in field_upper:
+                    mapped_data['address'] = value
+                # Map email fields
+                elif 'EMAIL' in field_upper:
+                    mapped_data['email'] = value
+                # Map phone fields
+                elif 'PHONE' in field_upper:
+                    mapped_data['phone'] = value
+
+            # Convert line items to LineItem objects if present
+            line_items = None
+            if line_items_raw and isinstance(line_items_raw, list):
+                try:
+                    from models import LineItem
+                    line_items = [LineItem(**item) for item in line_items_raw]
+                except Exception as e:
+                    print(f"Failed to parse line items: {e}")
+
+            # Create ExtractedData with:
+            # - Mapped fields for preview display
+            # - other_data with ALL fields in DocuWare field names for upload
+            # - line_items for preview
+            mapped_data['line_items'] = line_items
+            extracted_data = ExtractedData(**mapped_data, other_data=other_data)
 
             return category, confidence, extracted_data
 

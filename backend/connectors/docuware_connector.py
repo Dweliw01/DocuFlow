@@ -482,11 +482,12 @@ class DocuWareConnector(BaseConnector):
             if hasattr(dialog, 'fields'):
                 for field_name, field in dialog.fields.items():
                     is_required = getattr(field, 'mandatory', False) or getattr(field, 'not_empty', False)
+                    field_type = getattr(field, 'type', 'Text')
                     field_id = field.id if hasattr(field, 'id') else field_name
 
                     fields.append(IndexField(
                         name=field_id,
-                        type=getattr(field, 'type', 'Text'),
+                        type=field_type,
                         required=is_required,
                         max_length=getattr(field, 'length', None),
                         validation=None,
@@ -552,12 +553,13 @@ class DocuWareConnector(BaseConnector):
                     "error": "Could not authenticate with DocuWare"
                 }
 
-            # Get field types to sanitize data properly
+            # Get field definitions to sanitize data
             field_definitions = await self.get_index_fields(credentials, cabinet_id, dialog_id)
             field_types = {field.name: field.type for field in field_definitions}
 
             # Metadata is already in DocuWare field format - filter to selected fields and sanitize
             index_data = {}
+
             for field, value in metadata.items():
                 if field in selected_fields and value is not None and value != "":
                     # Sanitize value based on field type
@@ -590,7 +592,14 @@ class DocuWareConnector(BaseConnector):
         cabinet_id: str,
         index_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Synchronous document upload using DocuWare REST API."""
+        """
+        Synchronous document upload using DocuWare REST API.
+
+        Args:
+            file_path: Path to PDF file to upload
+            cabinet_id: DocuWare cabinet ID
+            index_data: Index field data (field_name -> value)
+        """
         try:
             # Get cabinet from cache, or populate cache if empty
             if cabinet_id not in self.cabinet_cache:
@@ -670,6 +679,7 @@ class DocuWareConnector(BaseConnector):
                     "Field": []
                 }
 
+                # Add index fields
                 for field_name, value in index_data.items():
                     field_entry = {
                         "FieldName": field_name,

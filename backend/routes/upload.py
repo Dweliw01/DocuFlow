@@ -211,7 +211,7 @@ async def process_single_document(file_path: str) -> DocumentResult:
     Process a single document through the full pipeline:
     1. OCR text extraction
     2. Quality validation
-    3. AI categorization
+    3. AI categorization with dynamic field extraction
 
     Args:
         file_path: Path to the PDF file
@@ -232,8 +232,20 @@ async def process_single_document(file_path: str) -> DocumentResult:
         if not ocr_service.validate_ocr_quality(extracted_text):
             raise Exception("OCR quality check failed - insufficient text extracted")
 
-        # Step 2: AI Categorization and Data Extraction
-        category, confidence, extracted_data = await ai_service.categorize_document(extracted_text, filename)
+        # Get selected fields from connector config (if configured)
+        selected_fields = None
+        config_tuple = get_current_config_with_decrypted_password()
+        if config_tuple:
+            connector_config, _ = config_tuple
+            if connector_config.connector_type == "docuware" and connector_config.docuware:
+                selected_fields = connector_config.docuware.selected_fields
+
+        # Step 2: AI Categorization and Data Extraction (dynamic if fields selected)
+        category, confidence, extracted_data = await ai_service.categorize_document(
+            extracted_text,
+            filename,
+            selected_fields=selected_fields
+        )
 
         # Create preview (first 500 chars)
         text_preview = extracted_text[:500] if extracted_text else ""

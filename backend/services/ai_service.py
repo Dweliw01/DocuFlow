@@ -25,23 +25,32 @@ class AIService:
         self.model = settings.claude_model
         print(f"[OK] AI Service initialized with {self.model}")
 
-    async def categorize_document(self, text: str, filename: str) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """
         Categorize document using AI and extract structured data.
 
         Args:
             text: Extracted text from the document
             filename: Original filename (provides additional context)
+            selected_fields: Optional list of DocuWare field names to extract (if provided, uses dynamic extraction)
 
         Returns:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
             Example: (DocumentCategory.INVOICE, 0.95, ExtractedData(...))
         """
-        prompt = self._build_categorization_prompt(text, filename)
+        if selected_fields:
+            # Use dynamic field extraction based on DocuWare fields
+            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields)
+        else:
+            # Use default extraction
+            prompt = self._build_categorization_prompt(text, filename)
 
         try:
             response = await self._categorize_claude(prompt)
-            return self._parse_categorization_response(response)
+            if selected_fields:
+                return self._parse_dynamic_extraction_response(response, selected_fields)
+            else:
+                return self._parse_categorization_response(response)
 
         except Exception as e:
             print(f"AI categorization failed: {e}")
@@ -270,3 +279,111 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
 
         # Default to OTHER if no match
         return DocumentCategory.OTHER
+
+    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list) -> str:
+        """
+        Build a dynamic prompt that extracts specific DocuWare fields.
+
+        Args:
+            text: Document text
+            filename: Original filename
+            selected_fields: List of DocuWare field names to extract
+
+        Returns:
+            Prompt string for Claude
+        """
+        # Truncate text if too long
+        max_chars = 4000
+        if len(text) > max_chars:
+            text = text[:max_chars] + "...[truncated]"
+
+        categories_list = ", ".join([cat.value for cat in DocumentCategory])
+        fields_list = ", ".join(selected_fields)
+
+        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract specific fields.
+
+FILENAME: {filename}
+
+DOCUMENT TEXT:
+{text}
+
+INSTRUCTIONS:
+1. Categorize this document into ONE of the following categories:
+   {categories_list}
+
+2. Provide a confidence score between 0.0 and 1.0
+
+3. Extract the following SPECIFIC FIELDS from the document:
+   {fields_list}
+
+4. For each field:
+   - Look for the information that best matches the field name
+   - If the field name suggests a date (e.g., ORDER_DATE, DUE_DATE, SHIP_DATE), extract in YYYY-MM-DD format
+   - If the field suggests an amount (e.g., AMOUNT, TOTAL, PRICE), include currency symbol
+   - If the field is not present in the document, set it to null
+   - Extract EXACTLY what appears on the document, don't invent data
+
+5. Field name hints:
+   - VENDOR/SUPPLIER/COMPANY: Who is providing the goods/services
+   - CLIENT/CUSTOMER: Who is receiving the goods/services
+   - ORDER_DATE/INVOICE_DATE/DATE: Primary document date
+   - DUE_DATE/PAYMENT_DATE: When payment is due
+   - AMOUNT/TOTAL: Total monetary amount
+   - PO_NUMBER/REFERENCE/ORDER_NO: Purchase order or reference number
+   - INVOICE_NO/DOC_NUMBER: Document identifier
+   - SHIP_DATE/DELIVERY_DATE: Shipping or delivery date
+   - TERMS/PAYMENT_TERMS: Payment terms (e.g., "Net 30")
+
+6. Respond ONLY with valid JSON in this exact format (no other text):
+{{
+    "category": "Category Name",
+    "confidence": 0.95,
+    "extracted_fields": {{
+        "FIELD_NAME_1": "extracted value 1",
+        "FIELD_NAME_2": "extracted value 2",
+        "FIELD_NAME_3": null
+    }}
+}}
+
+DO NOT include markdown code blocks or any other formatting. Output only the JSON object."""
+
+    def _parse_dynamic_extraction_response(self, response: str, selected_fields: list) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+        """
+        Parse Claude's dynamic extraction response.
+
+        Args:
+            response: JSON string from Claude
+            selected_fields: List of field names that were requested
+
+        Returns:
+            Tuple of (DocumentCategory, confidence_score, extracted_data)
+        """
+        try:
+            # Clean up response
+            response = response.strip()
+            if response.startswith("```"):
+                lines = response.split("\n")
+                response = "\n".join([line for line in lines if not line.startswith("```")])
+
+            data = json.loads(response)
+
+            # Extract category
+            category_str = data.get("category", "Other")
+            category = self._match_category(category_str)
+
+            # Extract confidence
+            confidence = float(data.get("confidence", 0.5))
+
+            # Extract fields - return as dict (not ExtractedData) since fields are dynamic
+            extracted_fields = data.get("extracted_fields", {})
+
+            # Create a minimal ExtractedData with extracted fields in other_data
+            extracted_data = ExtractedData(other_data=extracted_fields)
+
+            return category, confidence, extracted_data
+
+        except Exception as e:
+            print(f"Failed to parse dynamic extraction response: {e}")
+            print(f"Response was: {response}")
+            # Return safe fallback
+            return DocumentCategory.OTHER, 0.3, None

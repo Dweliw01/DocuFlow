@@ -178,12 +178,13 @@ class IndexField(BaseModel):
     required: bool
     max_length: Optional[int] = None
     validation: Optional[str] = None
+    is_system_field: bool = False  # True for DocuWare system fields (DWDOCID, etc.)
 
 
 class DocuWareConfig(BaseModel):
     """
     DocuWare connector configuration.
-    Stores connection details and field mapping.
+    Stores connection details and selected fields for AI extraction.
     """
     server_url: str
     username: str
@@ -192,7 +193,7 @@ class DocuWareConfig(BaseModel):
     cabinet_name: str
     dialog_id: str
     dialog_name: str
-    field_mapping: Dict[str, str]  # DocuFlow field -> DocuWare field
+    selected_fields: List[str]  # List of DocuWare field names to extract
 
 
 class GoogleDriveConfig(BaseModel):

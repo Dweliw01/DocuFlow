@@ -120,11 +120,17 @@ class ConnectorManager:
             storage_config = {
                 "cabinet_id": docuware_config.cabinet_id,
                 "dialog_id": docuware_config.dialog_id,
-                "field_mapping": docuware_config.field_mapping
+                "selected_fields": docuware_config.selected_fields
             }
 
-            # Convert ExtractedData to dict
-            metadata = extracted_data.dict(exclude_none=True)
+            # Extract metadata - use other_data if available (dynamic extraction)
+            # Otherwise fall back to standard fields
+            if extracted_data and extracted_data.other_data:
+                # Dynamic extraction - data is already in DocuWare field names
+                metadata = extracted_data.other_data
+            else:
+                # Legacy fallback - use standard extracted data
+                metadata = extracted_data.dict(exclude_none=True) if extracted_data else {}
 
             # Validate metadata before upload
             is_valid, errors = await self.docuware_connector.validate_metadata(

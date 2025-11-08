@@ -39,6 +39,97 @@ class DocuWareConnector(BaseConnector):
         self.client = None
         self.session = None
 
+    def _is_system_field(self, field_name: str) -> bool:
+        """
+        Detect if a field is a DocuWare system field.
+        System fields are auto-managed by DocuWare and not for user input.
+
+        Args:
+            field_name: Name of the field
+
+        Returns:
+            True if system field, False otherwise
+        """
+        field_name_upper = field_name.upper()
+
+        # Common DocuWare system field prefixes and names
+        system_prefixes = ['DW', 'SYS_']
+        system_fields = [
+            'DOCID', 'DOCUMENT_ID', 'DWDOCID',
+            'STODATE', 'DWSTODATE', 'STORAGE_DATE',
+            'STOUSER', 'DWSTOUSER', 'STORAGE_USER',
+            'MODDATE', 'DWMODDATE', 'MODIFIED_DATE',
+            'MODUSER', 'DWMODUSER', 'MODIFIED_USER',
+            'CREATED_AT', 'CREATED_BY', 'UPDATED_AT', 'UPDATED_BY',
+            'VERSION', 'STATUS', 'WORKFLOW_STATE'
+        ]
+
+        # Check if starts with system prefix
+        for prefix in system_prefixes:
+            if field_name_upper.startswith(prefix):
+                return True
+
+        # Check if exact match with system field
+        if field_name_upper in system_fields:
+            return True
+
+        return False
+
+    def _sanitize_field_value(self, value: Any, field_type: str) -> Any:
+        """
+        Sanitize field value based on DocuWare field type.
+        Removes currency symbols, commas, etc. from numeric fields.
+
+        Args:
+            value: Raw field value
+            field_type: DocuWare field type (e.g., 'Decimal', 'Text', 'Date')
+
+        Returns:
+            Sanitized value appropriate for the field type
+        """
+        if value is None or value == "":
+            return value
+
+        # Convert to string for processing
+        value_str = str(value).strip()
+
+        # Handle Decimal fields - remove currency symbols and commas
+        if field_type in ['Decimal', 'Currency', 'Number', 'Int', 'Integer']:
+            # Remove common currency symbols
+            currency_symbols = ['$', '€', '£', '¥', '₹', '₽', 'USD', 'EUR', 'GBP', 'CAD', 'AUD']
+            for symbol in currency_symbols:
+                value_str = value_str.replace(symbol, '')
+
+            # Remove commas (thousands separator)
+            value_str = value_str.replace(',', '')
+
+            # Remove spaces
+            value_str = value_str.strip()
+
+            # Validate it's a valid number
+            try:
+                # Try to convert to float to validate
+                float(value_str)
+                return value_str
+            except ValueError:
+                # Not a valid number, return None
+                print(f"Warning: Could not convert '{value}' to decimal, skipping field")
+                return None
+
+        # Handle Date fields - ensure YYYY-MM-DD format
+        elif field_type in ['Date', 'DateTime']:
+            # Date should already be in YYYY-MM-DD format from AI
+            # Just validate and return
+            import re
+            if re.match(r'^\d{4}-\d{2}-\d{2}', value_str):
+                return value_str
+            else:
+                print(f"Warning: Date '{value}' not in expected format, skipping field")
+                return None
+
+        # For all other types (Text, etc.), return as-is
+        return value_str
+
     def _normalize_server_url(self, server_url: str) -> str:
         """
         Normalize server URL by adding https:// if missing and removing trailing slash.
@@ -391,13 +482,15 @@ class DocuWareConnector(BaseConnector):
             if hasattr(dialog, 'fields'):
                 for field_name, field in dialog.fields.items():
                     is_required = getattr(field, 'mandatory', False) or getattr(field, 'not_empty', False)
+                    field_id = field.id if hasattr(field, 'id') else field_name
 
                     fields.append(IndexField(
-                        name=field.id if hasattr(field, 'id') else field_name,
+                        name=field_id,
                         type=getattr(field, 'type', 'Text'),
                         required=is_required,
                         max_length=getattr(field, 'length', None),
-                        validation=None
+                        validation=None,
+                        is_system_field=self._is_system_field(field_id)
                     ))
 
             print(f"Found {len(fields)} fields for dialog {dialog_id}")
@@ -434,12 +527,12 @@ class DocuWareConnector(BaseConnector):
 
         Args:
             file_path: Path to document file
-            metadata: Extracted metadata (ExtractedData fields)
+            metadata: Extracted metadata (already in DocuWare field names)
             credentials: Server URL, username, password
             storage_config: {
                 "cabinet_id": "...",
                 "dialog_id": "...",
-                "field_mapping": {"vendor": "VENDOR_NAME", ...}
+                "selected_fields": ["VENDOR", "ORDER_DATE", ...]
             }
 
         Returns:
@@ -448,7 +541,7 @@ class DocuWareConnector(BaseConnector):
         try:
             cabinet_id = storage_config['cabinet_id']
             dialog_id = storage_config['dialog_id']
-            field_mapping = storage_config.get('field_mapping', {})
+            selected_fields = storage_config.get('selected_fields', [])
 
             # Always authenticate to ensure we're using the correct credentials
             session = await self.authenticate(credentials)
@@ -459,11 +552,18 @@ class DocuWareConnector(BaseConnector):
                     "error": "Could not authenticate with DocuWare"
                 }
 
-            # Get index fields to validate and convert types
-            index_fields = await self.get_index_fields(credentials, cabinet_id, dialog_id)
+            # Get field types to sanitize data properly
+            field_definitions = await self.get_index_fields(credentials, cabinet_id, dialog_id)
+            field_types = {field.name: field.type for field in field_definitions}
 
-            # Prepare index data from metadata using field mapping
-            index_data = self._prepare_index_data(metadata, field_mapping, index_fields)
+            # Metadata is already in DocuWare field format - filter to selected fields and sanitize
+            index_data = {}
+            for field, value in metadata.items():
+                if field in selected_fields and value is not None and value != "":
+                    # Sanitize value based on field type
+                    sanitized_value = self._sanitize_field_value(value, field_types.get(field, 'Text'))
+                    if sanitized_value is not None and sanitized_value != "":
+                        index_data[field] = sanitized_value
 
             # Upload document in thread pool
             loop = asyncio.get_event_loop()
@@ -663,8 +763,8 @@ class DocuWareConnector(BaseConnector):
         Optional fields can be empty.
 
         Args:
-            metadata: Extracted metadata
-            storage_config: Storage configuration with field mapping
+            metadata: Extracted metadata (already in DocuWare field names)
+            storage_config: Storage configuration with selected_fields
             credentials: Optional credentials to fetch field definitions
 
         Returns:
@@ -674,11 +774,11 @@ class DocuWareConnector(BaseConnector):
         warnings = []
 
         # Check if required configuration is present
-        if 'field_mapping' not in storage_config:
-            errors.append("Field mapping not configured")
+        if 'selected_fields' not in storage_config:
+            errors.append("Selected fields not configured")
             return False, errors
 
-        field_mapping = storage_config['field_mapping']
+        selected_fields = storage_config['selected_fields']
 
         # If credentials provided, get index fields to check requirements
         index_fields = []
@@ -695,20 +795,20 @@ class DocuWareConnector(BaseConnector):
         # Build a map of field names to their definitions
         field_defs = {field.name: field for field in index_fields}
 
-        # Check mapped fields
-        for docuflow_field, docuware_field in field_mapping.items():
-            value = metadata.get(docuflow_field)
+        # Check selected fields
+        for field_name in selected_fields:
+            value = metadata.get(field_name)
 
             # Check if this DocuWare field is required
-            field_def = field_defs.get(docuware_field)
+            field_def = field_defs.get(field_name)
             is_required = field_def.required if field_def else False
 
             if (value is None or value == "") and is_required:
                 # Required field is missing
-                errors.append(f"Required field '{docuware_field}' (mapped from '{docuflow_field}') has no value")
+                errors.append(f"Required field '{field_name}' has no value")
             elif (value is None or value == "") and not is_required:
                 # Optional field is missing - just a warning, not an error
-                warnings.append(f"Optional field '{docuware_field}' (mapped from '{docuflow_field}') has no value")
+                warnings.append(f"Optional field '{field_name}' has no value")
 
         # Log warnings (but don't fail validation)
         if warnings:

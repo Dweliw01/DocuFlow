@@ -296,10 +296,10 @@ async function loadIndexFields() {
         // Show index fields section
         document.getElementById('index-fields-section').style.display = 'block';
 
-        // Build field mapping
-        buildFieldMapping(state.indexFields);
+        // Build field selection
+        buildFieldSelection(state.indexFields);
 
-        // Show field mapping section
+        // Show field selection section
         document.getElementById('field-mapping-section').style.display = 'block';
 
         // Show save button
@@ -351,70 +351,98 @@ function displayIndexFields(fields) {
 // Field Mapping
 // ============================================================================
 
-function buildFieldMapping(docuwareFields) {
-    const docuflowFields = [
-        'vendor',
-        'document_number',
-        'date',
-        'due_date',
-        'amount',
-        'currency',
-        'reference_number',
-        'person_name',
-        'company',
-        'client',
-        'address',
-        'email',
-        'phone',
-        'document_type'
-    ];
-
+function buildFieldSelection(docuwareFields) {
     const container = document.getElementById('field-mapping-container');
 
-    const mappingHtml = `
-        <div class="mapping-grid">
-            ${docuflowFields.map(dfField => `
-                <div class="mapping-row">
-                    <span class="df-field">${dfField}</span>
-                    <span class="mapping-arrow">→</span>
-                    <select class="dw-field-select" data-df-field="${dfField}">
-                        <option value="">-- Not Mapped --</option>
-                        ${docuwareFields.map(dwField => `
-                            <option value="${dwField.name}">${dwField.name}</option>
+    // Filter out system fields
+    const userFields = docuwareFields.filter(field => !field.is_system_field);
+
+    // Group fields by required vs optional
+    const requiredFields = userFields.filter(field => field.required);
+    const optionalFields = userFields.filter(field => !field.required);
+
+    const selectionHtml = `
+        <div class="field-selection-container">
+            ${requiredFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">Required Fields <span class="field-count">(${requiredFields.length})</span></h3>
+                    <p class="field-group-description">These fields are required by DocuWare and should be extracted from documents</p>
+                    <div class="field-checkboxes">
+                        ${requiredFields.map(field => `
+                            <label class="field-checkbox">
+                                <input
+                                    type="checkbox"
+                                    class="field-checkbox-input"
+                                    data-field-name="${field.name}"
+                                    data-required="true"
+                                    checked
+                                >
+                                <span class="field-name">${field.name}</span>
+                                <span class="field-badge field-badge-required">Required</span>
+                            </label>
                         `).join('')}
-                    </select>
+                    </div>
                 </div>
-            `).join('')}
+            ` : ''}
+
+            ${optionalFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">Optional Fields <span class="field-count">(${optionalFields.length})</span></h3>
+                    <p class="field-group-description">Select which optional fields AI should try to extract</p>
+                    <div class="field-checkboxes">
+                        ${optionalFields.map(field => `
+                            <label class="field-checkbox">
+                                <input
+                                    type="checkbox"
+                                    class="field-checkbox-input"
+                                    data-field-name="${field.name}"
+                                    data-required="false"
+                                >
+                                <span class="field-name">${field.name}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <div class="field-selection-summary">
+                <strong>Selected:</strong> <span id="selected-field-count">0</span> fields
+            </div>
         </div>
     `;
 
-    container.innerHTML = mappingHtml;
+    container.innerHTML = selectionHtml;
 
-    // If editing existing config, restore saved mappings
-    if (state.editingConfig && state.editingConfig.fieldMapping) {
-        restoreFieldMappings(state.editingConfig.fieldMapping);
-    } else {
-        // Auto-map fields for new configuration
-        autoMapFields(docuflowFields, docuwareFields);
+    // If editing existing config, restore saved selections
+    if (state.editingConfig && state.editingConfig.selectedFields) {
+        restoreFieldSelections(state.editingConfig.selectedFields);
     }
 
     // Add change listeners
-    document.querySelectorAll('.dw-field-select').forEach(select => {
-        select.addEventListener('change', validateMapping);
+    document.querySelectorAll('.field-checkbox-input').forEach(checkbox => {
+        checkbox.addEventListener('change', updateFieldSelectionCount);
     });
 
-    // Initial validation
-    validateMapping();
+    // Initial count update
+    updateFieldSelectionCount();
 }
 
-function restoreFieldMappings(savedMapping) {
-    Object.entries(savedMapping).forEach(([dfField, dwField]) => {
-        const select = document.querySelector(`[data-df-field="${dfField}"]`);
-        if (select) {
-            select.value = dwField;
-            console.log(`Restored mapping: ${dfField} → ${dwField}`);
+function restoreFieldSelections(selectedFields) {
+    selectedFields.forEach(fieldName => {
+        const checkbox = document.querySelector(`[data-field-name="${fieldName}"]`);
+        if (checkbox) {
+            checkbox.checked = true;
+            console.log(`Restored selection: ${fieldName}`);
         }
     });
+}
+
+function updateFieldSelectionCount() {
+    const selectedCount = document.querySelectorAll('.field-checkbox-input:checked').length;
+    const countSpan = document.getElementById('selected-field-count');
+    if (countSpan) {
+        countSpan.textContent = selectedCount;
+    }
 }
 
 function autoMapFields(docuflowFields, docuwareFields) {
@@ -534,8 +562,12 @@ async function saveConfiguration() {
                 return;
             }
 
-            if (Object.keys(state.fieldMapping).length === 0) {
-                showAlert('connection-status', 'error', 'Please configure field mapping');
+            // Collect selected fields
+            const selectedFields = Array.from(document.querySelectorAll('.field-checkbox-input:checked'))
+                .map(checkbox => checkbox.dataset.fieldName);
+
+            if (selectedFields.length === 0) {
+                showAlert('connection-status', 'error', 'Please select at least one field');
                 return;
             }
 
@@ -550,7 +582,7 @@ async function saveConfiguration() {
                     cabinet_name: state.selectedCabinet.name,
                     dialog_id: state.selectedDialog.id,
                     dialog_name: state.selectedDialog.name,
-                    field_mapping: state.fieldMapping
+                    selected_fields: selectedFields
                 },
                 google_drive: null,
                 onedrive: null
@@ -656,8 +688,8 @@ function displayConfigurationSummary(config) {
         document.getElementById('current-cabinet').textContent = dw.cabinet_name || dw.cabinet_id;
         document.getElementById('current-dialog').textContent = dw.dialog_name || dw.dialog_id;
 
-        const mappingCount = Object.keys(dw.field_mapping || {}).length;
-        document.getElementById('current-mappings-count').textContent = `${mappingCount} field${mappingCount !== 1 ? 's' : ''} mapped`;
+        const selectedCount = dw.selected_fields?.length || 0;
+        document.getElementById('current-mappings-count').textContent = `${selectedCount} field${selectedCount !== 1 ? 's' : ''} selected`;
     } else {
         document.getElementById('docuware-summary').style.display = 'none';
     }
@@ -706,7 +738,7 @@ async function editConfiguration() {
             cabinetName: dw.cabinet_name,
             dialogId: dw.dialog_id,
             dialogName: dw.dialog_name,
-            fieldMapping: dw.field_mapping
+            selectedFields: dw.selected_fields
         };
     }
 

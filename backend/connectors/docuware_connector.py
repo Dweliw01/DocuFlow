@@ -391,13 +391,26 @@ class DocuWareConnector(BaseConnector):
             if hasattr(dialog, 'fields'):
                 for field_name, field in dialog.fields.items():
                     is_required = getattr(field, 'mandatory', False) or getattr(field, 'not_empty', False)
+                    field_type = getattr(field, 'type', 'Text')
+                    field_id = field.id if hasattr(field, 'id') else field_name
+
+                    # Check if this is a table field
+                    is_table = field_type.lower() == 'table'
+                    table_columns = None
+
+                    if is_table:
+                        # Fetch table column definitions
+                        table_columns = self._get_table_columns(field)
+                        print(f"Table field detected: {field_id} with {len(table_columns)} columns")
 
                     fields.append(IndexField(
-                        name=field.id if hasattr(field, 'id') else field_name,
-                        type=getattr(field, 'type', 'Text'),
+                        name=field_id,
+                        type=field_type,
                         required=is_required,
                         max_length=getattr(field, 'length', None),
-                        validation=None
+                        validation=None,
+                        is_table_field=is_table,
+                        columns=table_columns
                     ))
 
             print(f"Found {len(fields)} fields for dialog {dialog_id}")
@@ -407,6 +420,45 @@ class DocuWareConnector(BaseConnector):
             import traceback
             traceback.print_exc()
             return []
+
+    def _get_table_columns(self, table_field) -> List:
+        """
+        Extract column definitions from a DocuWare table field.
+
+        Args:
+            table_field: DocuWare table field object
+
+        Returns:
+            List of TableColumn objects
+        """
+        from models import TableColumn
+
+        columns = []
+        try:
+            # DocuWare table fields have a 'fields' or 'table_fields' attribute with column definitions
+            if hasattr(table_field, 'fields'):
+                # Iterate through table columns
+                for col_name, col_field in table_field.fields.items():
+                    col_id = col_field.id if hasattr(col_field, 'id') else col_name
+                    columns.append(TableColumn(
+                        name=col_id,
+                        type=getattr(col_field, 'type', 'Text'),
+                        max_length=getattr(col_field, 'length', None)
+                    ))
+            elif hasattr(table_field, 'table_fields'):
+                # Alternative attribute name
+                for col_field in table_field.table_fields:
+                    columns.append(TableColumn(
+                        name=col_field.id if hasattr(col_field, 'id') else col_field.name,
+                        type=getattr(col_field, 'type', 'Text'),
+                        max_length=getattr(col_field, 'length', None)
+                    ))
+
+            print(f"Extracted {len(columns)} columns from table field")
+        except Exception as e:
+            print(f"Error extracting table columns: {e}")
+
+        return columns
 
     async def get_storage_locations(self, credentials: Dict[str, str]) -> List[Dict[str, str]]:
         """

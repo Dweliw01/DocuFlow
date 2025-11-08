@@ -211,7 +211,7 @@ async def process_single_document(file_path: str) -> DocumentResult:
     Process a single document through the full pipeline:
     1. OCR text extraction
     2. Quality validation
-    3. AI categorization
+    3. AI categorization (context-aware if fields configured)
 
     Args:
         file_path: Path to the PDF file
@@ -232,8 +232,28 @@ async def process_single_document(file_path: str) -> DocumentResult:
         if not ocr_service.validate_ocr_quality(extracted_text):
             raise Exception("OCR quality check failed - insufficient text extracted")
 
-        # Step 2: AI Categorization and Data Extraction
-        category, confidence, extracted_data = await ai_service.categorize_document(extracted_text, filename)
+        # Get selected fields from connector config for context-aware AI
+        selected_fields = None
+        try:
+            config_tuple = get_current_config_with_decrypted_password()
+            if config_tuple:
+                connector_config, _ = config_tuple
+                if connector_config.connector_type == ConnectorType.DOCUWARE and connector_config.docuware:
+                    # Try to get selected_fields (new format) or fall back to field_mapping keys (old format)
+                    if hasattr(connector_config.docuware, 'selected_fields'):
+                        selected_fields = connector_config.docuware.selected_fields
+                    elif hasattr(connector_config.docuware, 'field_mapping'):
+                        # Use field_mapping values (DocuWare field names) as selected fields
+                        selected_fields = list(connector_config.docuware.field_mapping.values())
+        except Exception as e:
+            print(f"Could not get selected fields from config: {e}")
+
+        # Step 2: AI Categorization and Data Extraction (with context awareness if fields available)
+        category, confidence, extracted_data = await ai_service.categorize_document(
+            extracted_text,
+            filename,
+            selected_fields=selected_fields
+        )
 
         # Create preview (first 500 chars)
         text_preview = extracted_text[:500] if extracted_text else ""

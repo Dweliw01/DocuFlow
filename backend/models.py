@@ -169,15 +169,27 @@ class StorageDialog(BaseModel):
     description: Optional[str] = None
 
 
-class IndexField(BaseModel):
+class TableColumn(BaseModel):
     """
-    Document index field in DocuWare (metadata field).
+    Column definition for a DocuWare table field.
     """
     name: str
     type: str  # Text, Date, Decimal, Integer, etc.
+    max_length: Optional[int] = None
+
+
+class IndexField(BaseModel):
+    """
+    Document index field in DocuWare (metadata field).
+    Can be a regular field or a table field with columns.
+    """
+    name: str
+    type: str  # Text, Date, Decimal, Integer, Table, etc.
     required: bool
     max_length: Optional[int] = None
     validation: Optional[str] = None
+    is_table_field: bool = False
+    columns: Optional[List['TableColumn']] = None  # For table fields only
 
 
 class DocuWareConfig(BaseModel):

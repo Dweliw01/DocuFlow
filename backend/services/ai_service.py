@@ -25,19 +25,25 @@ class AIService:
         self.model = settings.claude_model
         print(f"[OK] AI Service initialized with {self.model}")
 
-    async def categorize_document(self, text: str, filename: str) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """
         Categorize document using AI and extract structured data.
 
         Args:
             text: Extracted text from the document
             filename: Original filename (provides additional context)
+            selected_fields: Optional list of field names for context-aware extraction
 
         Returns:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
             Example: (DocumentCategory.INVOICE, 0.95, ExtractedData(...))
         """
-        prompt = self._build_categorization_prompt(text, filename)
+        # Build context-aware prompt if fields are provided
+        if selected_fields:
+            cabinet_type = self._detect_cabinet_type(selected_fields)
+            prompt = self._build_context_aware_prompt(text, filename, selected_fields, cabinet_type)
+        else:
+            prompt = self._build_categorization_prompt(text, filename)
 
         try:
             response = await self._categorize_claude(prompt)
@@ -270,3 +276,188 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
 
         # Default to OTHER if no match
         return DocumentCategory.OTHER
+
+    def _detect_cabinet_type(self, selected_fields: list) -> str:
+        """
+        Detect cabinet type based on selected field names.
+
+        Args:
+            selected_fields: List of field names selected by user
+
+        Returns:
+            Cabinet type string: 'HR', 'AP', 'AR', 'Sales', 'Legal', 'General'
+        """
+        # Convert all field names to uppercase for matching
+        fields_upper = [field.upper() for field in selected_fields]
+        fields_str = ' '.join(fields_upper)
+
+        # HR indicators
+        hr_keywords = ['EMPLOYEE', 'HIRE', 'SALARY', 'WAGE', 'DEPARTMENT', 'POSITION',
+                       'TITLE', 'MANAGER', 'PERFORMANCE', 'REVIEW', 'TERMINATION',
+                       'ONBOARD', 'BENEFIT', 'LEAVE', 'VACATION', 'SICK', 'PTO',
+                       'PERSONNEL', 'STAFF', 'WORKER', 'JOB', 'EMPLOYMENT']
+        hr_score = sum(1 for keyword in hr_keywords if keyword in fields_str)
+
+        # AP (Accounts Payable) indicators
+        ap_keywords = ['VENDOR', 'SUPPLIER', 'INVOICE', 'BILL', 'PAYMENT', 'DUE_DATE',
+                       'AMOUNT', 'PO_NUMBER', 'PURCHASE', 'ORDER', 'PAYABLE', 'EXPENSE',
+                       'COST', 'TOTAL', 'TAX', 'RECEIPT', 'PAID']
+        ap_score = sum(1 for keyword in ap_keywords if keyword in fields_str)
+
+        # AR (Accounts Receivable) indicators
+        ar_keywords = ['CUSTOMER', 'CLIENT', 'RECEIVABLE', 'REVENUE', 'SALES',
+                       'COLLECTION', 'AGING', 'CREDIT', 'DEBIT']
+        ar_score = sum(1 for keyword in ar_keywords if keyword in fields_str)
+
+        # Sales indicators
+        sales_keywords = ['DEAL', 'OPPORTUNITY', 'QUOTE', 'PROPOSAL', 'CONTRACT',
+                         'COMMISSION', 'TERRITORY', 'PIPELINE', 'FORECAST',
+                         'LEAD', 'PROSPECT']
+        sales_score = sum(1 for keyword in sales_keywords if keyword in fields_str)
+
+        # Legal indicators
+        legal_keywords = ['CONTRACT', 'AGREEMENT', 'LEGAL', 'CLAUSE', 'TERM',
+                         'PARTY', 'SIGNATORY', 'JURISDICTION', 'LIABILITY',
+                         'INDEMNITY', 'CONFIDENTIAL', 'NDA']
+        legal_score = sum(1 for keyword in legal_keywords if keyword in fields_str)
+
+        # Determine cabinet type based on highest score
+        scores = {
+            'HR': hr_score,
+            'AP': ap_score,
+            'AR': ar_score,
+            'Sales': sales_score,
+            'Legal': legal_score
+        }
+
+        # Get the type with highest score
+        max_score = max(scores.values())
+        if max_score >= 2:  # Need at least 2 matching keywords
+            cabinet_type = max(scores, key=scores.get)
+            print(f"Detected cabinet type: {cabinet_type} (score: {max_score})")
+            return cabinet_type
+
+        print("Detected cabinet type: General (no strong indicators)")
+        return 'General'
+
+    def _build_context_aware_prompt(self, text: str, filename: str, selected_fields: list, cabinet_type: str) -> str:
+        """
+        Build a context-aware prompt based on cabinet type and selected fields.
+
+        Args:
+            text: Document text
+            filename: Original filename
+            selected_fields: List of field names to extract
+            cabinet_type: Detected cabinet type (HR, AP, AR, Sales, Legal, General)
+
+        Returns:
+            Prompt string for Claude
+        """
+        # Truncate text if too long
+        max_chars = 4000
+        if len(text) > max_chars:
+            text = text[:max_chars] + "...[truncated]"
+
+        categories_list = ", ".join([cat.value for cat in DocumentCategory])
+        fields_list = ", ".join(selected_fields)
+
+        # Build context-specific guidance based on cabinet type
+        context_guidance = self._get_context_guidance(cabinet_type)
+
+        return f"""You are a document classification and data extraction expert specializing in {cabinet_type} documents. Analyze the following document, categorize it, and extract specific fields.
+
+FILENAME: {filename}
+
+DOCUMENT TEXT:
+{text}
+
+CONTEXT: This document is being filed in a {cabinet_type} cabinet. {context_guidance}
+
+INSTRUCTIONS:
+1. Categorize this document into ONE of the following categories:
+   {categories_list}
+
+2. Provide a confidence score between 0.0 and 1.0
+
+3. Extract ONLY the following fields from the document:
+   {fields_list}
+
+4. Extraction guidelines:
+   - Extract ONLY the fields listed above - do not extract fields not in this list
+   - If a field name suggests a date (e.g., contains DATE), use YYYY-MM-DD format
+   - If a field name suggests an amount/number (e.g., AMOUNT, SALARY, TOTAL), extract as plain number with decimals (e.g., "25000.50")
+   - If a field is not present in the document, set it to null
+   - Extract information exactly as it appears - do not invent or infer data
+
+5. Field interpretation hints (based on {cabinet_type} context):
+{self._get_field_hints(cabinet_type)}
+
+6. Respond ONLY with valid JSON in this exact format (no markdown, no other text):
+{{
+    "category": "Category Name",
+    "confidence": 0.95,
+    "extracted_data": {{
+        "FIELD_NAME_1": "value 1",
+        "FIELD_NAME_2": "value 2",
+        "FIELD_NAME_3": null
+    }}
+}}"""
+
+    def _get_context_guidance(self, cabinet_type: str) -> str:
+        """Get context-specific guidance for different cabinet types."""
+        guidance = {
+            'HR': "Focus on employee-related information such as names, departments, positions, dates of employment, and compensation details.",
+            'AP': "Focus on vendor information, invoice details, payment amounts, purchase orders, and due dates.",
+            'AR': "Focus on customer information, revenue details, payment collection, and aging information.",
+            'Sales': "Focus on deal details, client information, contract values, sales representatives, and opportunity data.",
+            'Legal': "Focus on contract parties, agreement terms, signatures, dates, and legal obligations.",
+            'General': "Extract the requested fields as they appear in the document."
+        }
+        return guidance.get(cabinet_type, guidance['General'])
+
+    def _get_field_hints(self, cabinet_type: str) -> str:
+        """Get field-specific hints based on cabinet type."""
+        hints = {
+            'HR': """   - EMPLOYEE_ID/EMPLOYEE_NO: Unique employee identifier
+   - HIRE_DATE/START_DATE: Date when employee started
+   - DEPARTMENT: Organizational department or division
+   - POSITION/TITLE: Job title or role
+   - SALARY/WAGE: Compensation amount (extract number only)
+   - MANAGER: Name of direct supervisor
+   - TERMINATION_DATE/END_DATE: Last day of employment (if applicable)""",
+
+            'AP': """   - VENDOR/SUPPLIER: Company providing goods/services
+   - INVOICE_NO/INVOICE_NUMBER: Unique invoice identifier
+   - INVOICE_DATE: Date invoice was issued
+   - DUE_DATE/PAYMENT_DATE: When payment is due
+   - AMOUNT/TOTAL: Total amount (extract number only)
+   - PO_NUMBER/PURCHASE_ORDER: Purchase order reference
+   - TAX: Tax amount (extract number only)""",
+
+            'AR': """   - CUSTOMER/CLIENT: Company or person receiving goods/services
+   - INVOICE_NO: Invoice or billing reference
+   - INVOICE_DATE: Date of invoice
+   - AMOUNT/TOTAL: Amount due (extract number only)
+   - DUE_DATE: Payment due date
+   - AGING: Days past due (if applicable)""",
+
+            'Sales': """   - CLIENT/CUSTOMER: Prospective or current customer
+   - DEAL_VALUE/CONTRACT_VALUE: Total deal amount (extract number only)
+   - SALES_REP: Sales representative name
+   - CLOSE_DATE: Expected or actual close date
+   - STAGE: Sales pipeline stage
+   - OPPORTUNITY_ID: Unique opportunity identifier""",
+
+            'Legal': """   - CONTRACT_NO/AGREEMENT_NO: Unique contract identifier
+   - PARTY_1/PARTY_2: Contracting parties
+   - EFFECTIVE_DATE: When contract takes effect
+   - EXPIRATION_DATE: When contract ends
+   - CONTRACT_VALUE: Total contract value (extract number only)
+   - SIGNATORY: Person authorized to sign""",
+
+            'General': """   - Extract each field as it most naturally appears in the document
+   - Use field names as hints for what type of information to look for
+   - Dates should be in YYYY-MM-DD format
+   - Numbers should be plain decimals without currency symbols"""
+        }
+        return hints.get(cabinet_type, hints['General'])

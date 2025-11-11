@@ -49,6 +49,10 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+backend/test_storage/
 
 # Logs
 *.log
+
+# Windows artifacts
+NUL

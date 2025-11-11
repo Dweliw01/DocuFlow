@@ -61,6 +61,7 @@
                         <span class="config-label">Connector Type:</span>
                         <span id="current-connector-type" class="config-value"></span>
                     </div>
+                    <!-- DocuWare Summary -->
                     <div id="docuware-summary" style="display: none;">
                         <div class="config-row">
                             <span class="config-label">Server URL:</span>
@@ -83,6 +84,25 @@
                             <span id="current-mappings-count" class="config-value"></span>
                         </div>
                     </div>
+
+                    <!-- Google Drive Summary -->
+                    <div id="google-drive-summary" style="display: none;">
+                        <div class="config-row">
+                            <span class="config-label">Status:</span>
+                            <span class="config-value" style="color: #10b981;">
+                                <span style="display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 50%; margin-right: 6px;"></span>
+                                Connected to Google Drive
+                            </span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">Root Folder:</span>
+                            <span id="current-root-folder" class="config-value"></span>
+                        </div>
+                        <div class="config-row">
+                            <span class="config-label">Folder Structure:</span>
+                            <span id="current-folder-structure" class="config-value" style="font-family: 'Courier New', monospace; color: #6366f1;"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="config-actions">
@@ -99,9 +119,9 @@
         </div>
 
         <!-- Settings Card -->
-        <div class="settings-card">
+        <div id="settings-setup-card" class="settings-card">
             <!-- Section: Upload Destination -->
-            <div class="settings-section">
+            <div id="connector-selection-section" class="settings-section">
                 <div class="section-header">
                     <h2 class="section-title">📤 Upload Destination</h2>
                     <p class="section-description">Choose where processed documents should be uploaded</p>
@@ -111,7 +131,12 @@
                     <label class="radio-option">
                         <input type="radio" name="connector" value="none" checked>
                         <div class="radio-content">
-                            <span class="radio-label">None (Local only)</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z" fill="#6b7280"/>
+                                </svg>
+                                <span class="radio-label">None (Local only)</span>
+                            </div>
                             <span class="radio-description">Store documents locally without uploading</span>
                         </div>
                     </label>
@@ -119,7 +144,13 @@
                     <label class="radio-option">
                         <input type="radio" name="connector" value="docuware">
                         <div class="radio-content">
-                            <span class="radio-label">DocuWare</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <rect x="2" y="4" width="20" height="16" rx="2" fill="#0066CC"/>
+                                    <path d="M7 9h10M7 12h10M7 15h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                                <span class="radio-label">DocuWare</span>
+                            </div>
                             <span class="radio-description">Upload to DocuWare document management system</span>
                         </div>
                     </label>
@@ -127,7 +158,14 @@
                     <label class="radio-option">
                         <input type="radio" name="connector" value="google_drive">
                         <div class="radio-content">
-                            <span class="radio-label">Google Drive</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M7.71 3.5L1.15 15l3.58 6.5h12.54l3.58-6.5L14.29 3.5z" fill="#4285F4"/>
+                                    <path d="M14.29 3.5h-6.58l-3.29 5.68 3.29 5.69h6.58l3.29-5.69z" fill="#34A853"/>
+                                    <path d="M7.71 14.87H1.15L4.73 21.5h6.56z" fill="#FBBC04"/>
+                                </svg>
+                                <span class="radio-label">Google Drive</span>
+                            </div>
                             <span class="radio-description">Upload documents to Google Drive with auto-organized folders</span>
                         </div>
                     </label>
@@ -135,7 +173,12 @@
                     <label class="radio-option radio-option-disabled">
                         <input type="radio" name="connector" value="onedrive" disabled>
                         <div class="radio-content">
-                            <span class="radio-label">OneDrive</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <path d="M16.5 5.5a6.5 6.5 0 0 0-12.4 2.6A4.5 4.5 0 0 0 5.5 17h10a5.5 5.5 0 0 0 1-10.9z" fill="#0078D4"/>
+                                </svg>
+                                <span class="radio-label">OneDrive</span>
+                            </div>
                             <span class="radio-description">Coming soon - Upload to Microsoft OneDrive</span>
                         </div>
                     </label>
@@ -145,7 +188,14 @@
             <!-- Section: DocuWare Configuration (hidden by default) -->
             <div id="docuware-config" class="settings-section" style="display: none;">
                 <div class="section-header">
-                    <h2 class="section-title">🔌 DocuWare Configuration</h2>
+                    <h2 class="section-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="vertical-align: middle; margin-right: 8px;">
+                            <rect x="2" y="4" width="20" height="16" rx="2" fill="#0066CC" opacity="0.2"/>
+                            <rect x="2" y="4" width="20" height="16" rx="2" stroke="#0066CC" stroke-width="2" fill="none"/>
+                            <path d="M7 9h10M7 12h10M7 15h6" stroke="#0066CC" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        DocuWare Configuration
+                    </h2>
                     <p class="section-description">Connect to your DocuWare instance</p>
                 </div>
 
@@ -178,7 +228,14 @@
             <!-- Section: Google Drive Configuration (hidden by default) -->
             <div id="google-drive-config" class="settings-section" style="display: none;">
                 <div class="section-header">
-                    <h2 class="section-title">📁 Google Drive Configuration</h2>
+                    <h2 class="section-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M7.71 3.5L1.15 15l3.58 6.5h12.54l3.58-6.5L14.29 3.5z" fill="#4285F4"/>
+                            <path d="M14.29 3.5h-6.58l-3.29 5.68 3.29 5.69h6.58l3.29-5.69z" fill="#34A853"/>
+                            <path d="M7.71 14.87H1.15L4.73 21.5h6.56z" fill="#FBBC04"/>
+                        </svg>
+                        Google Drive Configuration
+                    </h2>
                     <p class="section-description">Connect to your Google Drive account with one click</p>
                 </div>
 
@@ -230,6 +287,244 @@
                 </div>
 
                 <div id="gdrive-connection-status" class="alert" style="display: none;"></div>
+            </div>
+
+            <!-- Section: Google Drive Folder Structure (hidden by default) -->
+            <div id="folder-structure-section" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style="vertical-align: middle; margin-right: 8px;">
+                            <path d="M7.71 3.5L1.15 15l3.58 6.5h12.54l3.58-6.5L14.29 3.5z" fill="#4285F4"/>
+                            <path d="M14.29 3.5h-6.58l-3.29 5.68 3.29 5.69h6.58l3.29-5.69z" fill="#34A853"/>
+                            <path d="M7.71 14.87H1.15L4.73 21.5h6.56z" fill="#FBBC04"/>
+                        </svg>
+                        Folder Organization Structure
+                    </h2>
+                    <p class="section-description">Configure how documents are organized in Google Drive</p>
+                </div>
+
+                <div class="info-banner" style="margin-bottom: 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white;">
+                    <span class="info-icon" style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px;">💡</span>
+                    <div>
+                        <strong style="color: white;">Dynamic Folder Hierarchy</strong>
+                        <p style="color: rgba(255,255,255,0.9); margin: 4px 0 0 0;">Choose up to 3 levels of folder organization. Documents will be automatically organized based on AI-extracted data.</p>
+                    </div>
+                </div>
+
+                <div class="folder-structure-preview" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border: 2px solid #667eea; border-radius: 12px; padding: 20px; margin-bottom: 24px; box-shadow: 0 4px 6px rgba(102, 126, 234, 0.1);">
+                    <div style="display: flex; align-items: center; margin-bottom: 12px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="margin-right: 8px;">
+                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z" fill="#667eea"/>
+                        </svg>
+                        <span style="font-weight: 600; color: #667eea; font-size: 14px;">Live Preview</span>
+                    </div>
+                    <div id="folder-preview" style="font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', monospace; color: #667eea; font-size: 15px; font-weight: 500; padding: 12px; background: white; border-radius: 6px; border-left: 4px solid #667eea;">
+                        📁 DocuFlow/...
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Primary Level (Required)</label>
+                    <select id="folder-primary" class="form-select">
+                        <option value="category">Category (Invoice, Receipt, Contract, etc.)</option>
+                        <option value="vendor">Vendor/Supplier Name</option>
+                        <option value="client">Client/Customer Name</option>
+                        <option value="company">Company Name</option>
+                        <option value="year">Year (2025, 2024, etc.)</option>
+                        <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="person_name">Person Name (for HR/personal docs)</option>
+                    </select>
+                    <span class="form-hint">First level of folder organization</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Secondary Level (Optional)</label>
+                    <select id="folder-secondary" class="form-select">
+                        <option value="vendor">Vendor/Supplier Name</option>
+                        <option value="none">None (skip this level)</option>
+                        <option value="category">Category (Invoice, Receipt, Contract, etc.)</option>
+                        <option value="client">Client/Customer Name</option>
+                        <option value="company">Company Name</option>
+                        <option value="year">Year (2025, 2024, etc.)</option>
+                        <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="person_name">Person Name (for HR/personal docs)</option>
+                    </select>
+                    <span class="form-hint">Second level of folder organization</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tertiary Level (Optional)</label>
+                    <select id="folder-tertiary" class="form-select">
+                        <option value="none">None (skip this level)</option>
+                        <option value="year">Year (2025, 2024, etc.)</option>
+                        <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="category">Category (Invoice, Receipt, Contract, etc.)</option>
+                        <option value="vendor">Vendor/Supplier Name</option>
+                        <option value="client">Client/Customer Name</option>
+                        <option value="company">Company Name</option>
+                        <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="person_name">Person Name (for HR/personal docs)</option>
+                    </select>
+                    <span class="form-hint">Third level of folder organization</span>
+                </div>
+
+                <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center;">
+                            <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 8px; padding: 8px; margin-right: 12px;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                                    <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; color: #111827; font-size: 16px;">Folder Organization Strategies</div>
+                                <div style="color: #6b7280; font-size: 13px;">Popular configurations for different use cases</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; gap: 16px;">
+                        <!-- Example 1: Category First -->
+                        <div style="background: #fafafa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 6px; height: 6px; background: #10b981; border-radius: 50%; margin-right: 10px;"></div>
+                                    <span style="font-weight: 600; color: #047857; font-size: 14px;">Category → Vendor</span>
+                                </div>
+                                <span style="background: #ecfdf5; color: #047857; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">RECOMMENDED</span>
+                            </div>
+                            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; color: #374151;">
+                                <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                        <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                    </svg>
+                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                </div>
+                                <div style="padding-left: 12px; margin-bottom: 6px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#60a5fa" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #1e40af;">Invoices</span>
+                                    </div>
+                                </div>
+                                <div style="padding-left: 32px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #64748b;">Acme-Corp</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="#10b981" style="margin-right: 6px;">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                </svg>
+                                <span style="color: #6b7280; font-size: 12px;">Best for organizing by document type first</span>
+                            </div>
+                        </div>
+
+                        <!-- Example 2: Year First -->
+                        <div style="background: #fafafa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 6px; height: 6px; background: #3b82f6; border-radius: 50%; margin-right: 10px;"></div>
+                                    <span style="font-weight: 600; color: #1e40af; font-size: 14px;">Year → Category → Vendor</span>
+                                </div>
+                                <span style="background: #eff6ff; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">ACCOUNTING</span>
+                            </div>
+                            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; color: #374151;">
+                                <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                        <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                    </svg>
+                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                </div>
+                                <div style="padding-left: 12px; margin-bottom: 6px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#60a5fa" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #1e40af;">2025</span>
+                                    </div>
+                                </div>
+                                <div style="padding-left: 32px; margin-bottom: 6px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #64748b;">Invoices</span>
+                                    </div>
+                                </div>
+                                <div style="padding-left: 52px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #64748b;">Acme-Corp</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="#3b82f6" style="margin-right: 6px;">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                </svg>
+                                <span style="color: #6b7280; font-size: 12px;">Perfect for tax filing and year-end reports</span>
+                            </div>
+                        </div>
+
+                        <!-- Example 3: Vendor First -->
+                        <div style="background: #fafafa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; transition: all 0.2s;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <div style="display: flex; align-items: center;">
+                                    <div style="width: 6px; height: 6px; background: #8b5cf6; border-radius: 50%; margin-right: 10px;"></div>
+                                    <span style="font-weight: 600; color: #6d28d9; font-size: 14px;">Vendor → Category</span>
+                                </div>
+                                <span style="background: #f5f3ff; color: #6d28d9; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">CLIENT MGMT</span>
+                            </div>
+                            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; font-family: 'SF Mono', 'Consolas', monospace; font-size: 13px; color: #374151;">
+                                <div style="display: flex; align-items: center; margin-bottom: 6px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                        <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                    </svg>
+                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                </div>
+                                <div style="padding-left: 12px; margin-bottom: 6px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#a78bfa" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #6d28d9;">Acme-Corp</span>
+                                    </div>
+                                </div>
+                                <div style="padding-left: 32px;">
+                                    <div style="display: flex; align-items: center;">
+                                        <span style="color: #cbd5e1; margin-right: 6px;">└─</span>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
+                                            <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
+                                        </svg>
+                                        <span style="color: #64748b;">Invoices</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="#8b5cf6" style="margin-right: 6px;">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                </svg>
+                                <span style="color: #6b7280; font-size: 12px;">Ideal for client and vendor relationship management</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Section: File Cabinet Selection (hidden by default) -->

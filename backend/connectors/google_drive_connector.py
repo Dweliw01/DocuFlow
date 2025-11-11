@@ -355,6 +355,154 @@ class GoogleDriveConnector:
 
         return filename
 
+    def _extract_folder_value(self, level: str, extracted_data: ExtractedData, category: DocumentCategory) -> Optional[str]:
+        """
+        Extract folder name value based on folder level type.
+
+        Args:
+            level: Folder level type (category, vendor, client, year, etc.)
+            extracted_data: Extracted document data
+            category: Document category
+
+        Returns:
+            Folder name string or None if not available
+        """
+        if level == 'category':
+            # Use category mapping
+            return CATEGORY_FOLDERS.get(category, "Other")
+
+        elif level == 'vendor':
+            return extracted_data.vendor or None
+
+        elif level == 'client':
+            return extracted_data.client or None
+
+        elif level == 'company':
+            return extracted_data.company or None
+
+        elif level == 'year':
+            if extracted_data.date:
+                try:
+                    # Extract year from date (handle various formats)
+                    date_str = extracted_data.date.split('T')[0] if 'T' in extracted_data.date else extracted_data.date
+                    year = date_str.split('-')[0]
+                    return year
+                except:
+                    return datetime.now().strftime('%Y')
+            return datetime.now().strftime('%Y')
+
+        elif level == 'year_month':
+            if extracted_data.date:
+                try:
+                    # Extract year-month from date
+                    date_str = extracted_data.date.split('T')[0] if 'T' in extracted_data.date else extracted_data.date
+                    parts = date_str.split('-')
+                    return f"{parts[0]}-{parts[1]}"
+                except:
+                    return datetime.now().strftime('%Y-%m')
+            return datetime.now().strftime('%Y-%m')
+
+        elif level == 'document_type':
+            return extracted_data.document_type or category.value
+
+        elif level == 'person_name':
+            return extracted_data.person_name or None
+
+        elif level == 'none':
+            return None
+
+        return None
+
+    async def build_dynamic_folder_path(
+        self,
+        extracted_data: ExtractedData,
+        category: DocumentCategory,
+        storage_config: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Build dynamic folder path based on folder structure configuration.
+        Creates nested folders as needed.
+
+        Args:
+            extracted_data: Extracted document data
+            category: Document category
+            storage_config: Google Drive configuration with folder structure settings
+
+        Returns:
+            Final folder ID or None if failed
+        """
+        try:
+            # Get folder structure configuration
+            primary_level = storage_config.get('primary_level', 'category')
+            secondary_level = storage_config.get('secondary_level', 'vendor')
+            tertiary_level = storage_config.get('tertiary_level', 'none')
+
+            # Build list of folder levels
+            levels = []
+            for level in [primary_level, secondary_level, tertiary_level]:
+                if level and level != 'none':
+                    folder_name = self._extract_folder_value(level, extracted_data, category)
+                    if folder_name:
+                        # Sanitize folder name
+                        folder_name = self._sanitize_filename_part(folder_name)
+                        levels.append(folder_name)
+
+            # If no levels extracted, fallback to category only
+            if not levels:
+                levels.append(CATEGORY_FOLDERS.get(category, "Other"))
+
+            # Create nested folders starting from root
+            current_folder_id = self.root_folder_id
+            folder_path_parts = []
+
+            for folder_name in levels:
+                # Check cache
+                cache_key = f"{current_folder_id}_{folder_name}"
+                if cache_key in self.folder_cache:
+                    current_folder_id = self.folder_cache[cache_key]
+                    folder_path_parts.append(folder_name)
+                    continue
+
+                # Search for existing folder
+                query = f"name='{folder_name}' and '{current_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+                results = self.service.files().list(
+                    q=query,
+                    spaces='drive',
+                    fields='files(id, name)'
+                ).execute()
+
+                files = results.get('files', [])
+
+                if files:
+                    # Folder exists
+                    current_folder_id = files[0]['id']
+                else:
+                    # Create new folder
+                    file_metadata = {
+                        'name': folder_name,
+                        'mimeType': 'application/vnd.google-apps.folder',
+                        'parents': [current_folder_id]
+                    }
+
+                    folder = self.service.files().create(
+                        body=file_metadata,
+                        fields='id'
+                    ).execute()
+
+                    current_folder_id = folder['id']
+                    logger.info(f"✓ Created folder: {folder_name}")
+
+                # Cache the folder ID
+                self.folder_cache[cache_key] = current_folder_id
+                folder_path_parts.append(folder_name)
+
+            logger.info(f"✓ Dynamic folder path: {'/'.join(folder_path_parts)}/")
+            return current_folder_id
+
+        except Exception as e:
+            logger.error(f"Failed to build dynamic folder path: {e}")
+            return None
+
     async def upload_document(
         self,
         pdf_path: Path,
@@ -395,13 +543,11 @@ class GoogleDriveConnector:
                 logger.error("Failed to get/create root folder")
                 return None
 
-            # Get or create category folder
-            folder_id = await self.get_or_create_category_folder(category)
+            # Build dynamic folder path based on configuration
+            folder_id = await self.build_dynamic_folder_path(extracted_data, category, storage_config)
 
             if not folder_id:
-                # Handle both enum and string for logging
-                cat_name = category.value if hasattr(category, 'value') else str(category)
-                logger.error(f"Failed to get/create category folder for {cat_name}")
+                logger.error("Failed to build dynamic folder path")
                 return None
 
             # Generate filename

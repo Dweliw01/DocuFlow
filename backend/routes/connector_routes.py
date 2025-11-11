@@ -25,6 +25,7 @@ from models import (
 from connectors.connector_manager import get_connector_manager
 from services.encryption_service import get_encryption_service
 from services.field_mapping_service import get_field_mapping_service
+from config import settings
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 
@@ -208,9 +209,9 @@ async def start_google_drive_oauth():
         OAuth authorization URL
     """
     try:
-        # Get OAuth credentials from environment
-        client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
-        client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
+        # Get OAuth credentials from settings
+        client_id = settings.google_oauth_client_id
+        client_secret = settings.google_oauth_client_secret
 
         if not client_id or not client_secret:
             raise HTTPException(
@@ -219,7 +220,7 @@ async def start_google_drive_oauth():
             )
 
         # Redirect URI (must match what's configured in Google Cloud Console)
-        redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://localhost:8000/api/connectors/google-drive/oauth-callback')
+        redirect_uri = settings.google_oauth_redirect_uri
 
         # Create OAuth flow
         flow = Flow.from_client_config(
@@ -281,10 +282,10 @@ async def google_drive_oauth_callback(code: str, state: str):
         # Remove used state token
         del oauth_state_storage[state]
 
-        # Get OAuth credentials from environment
-        client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
-        client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
-        redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://localhost:8000/api/connectors/google-drive/oauth-callback')
+        # Get OAuth credentials from settings
+        client_id = settings.google_oauth_client_id
+        client_secret = settings.google_oauth_client_secret
+        redirect_uri = settings.google_oauth_redirect_uri
 
         # Create OAuth flow
         flow = Flow.from_client_config(
@@ -472,7 +473,10 @@ async def get_google_drive_status():
     if current_connector_config and current_connector_config.connector_type == "google_drive":
         return {
             "connected": True,
-            "root_folder_name": current_connector_config.google_drive.root_folder_name
+            "root_folder_name": current_connector_config.google_drive.root_folder_name,
+            "primary_level": current_connector_config.google_drive.primary_level,
+            "secondary_level": current_connector_config.google_drive.secondary_level,
+            "tertiary_level": current_connector_config.google_drive.tertiary_level
         }
 
     return {

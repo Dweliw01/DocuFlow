@@ -151,6 +151,22 @@ class ConnectorType(str, Enum):
     ONEDRIVE = "onedrive"
 
 
+class FolderStructureLevel(str, Enum):
+    """
+    Available folder organization levels for dynamic folder structure.
+    Users can configure primary, secondary, and tertiary folder levels.
+    """
+    CATEGORY = "category"  # Document category (Invoice, Receipt, Contract, etc.)
+    VENDOR = "vendor"  # Vendor/supplier name
+    CLIENT = "client"  # Client/customer name
+    COMPANY = "company"  # Company name (general)
+    YEAR = "year"  # Year from document date (2025, 2024, etc.)
+    YEAR_MONTH = "year_month"  # Year-Month from document date (2025-01, 2025-02, etc.)
+    DOCUMENT_TYPE = "document_type"  # Specific document type (Purchase Invoice, W2, etc.)
+    PERSON_NAME = "person_name"  # Person name (for HR/personal docs)
+    NONE = "none"  # No folder level (skip)
+
+
 class FileCabinet(BaseModel):
     """
     DocuWare file cabinet (or equivalent storage location in other systems).
@@ -220,6 +236,11 @@ class GoogleDriveConfig(BaseModel):
     root_folder_name: Optional[str] = "DocuFlow"  # Root folder name in Drive
     root_folder_id: Optional[str] = None  # Cached root folder ID
     auto_create_folders: bool = True  # Auto-create category subfolders
+
+    # Dynamic folder structure configuration
+    primary_level: FolderStructureLevel = FolderStructureLevel.CATEGORY  # First folder level
+    secondary_level: FolderStructureLevel = FolderStructureLevel.VENDOR  # Second folder level
+    tertiary_level: FolderStructureLevel = FolderStructureLevel.NONE  # Third folder level (optional)
 
 
 class OneDriveConfig(BaseModel):

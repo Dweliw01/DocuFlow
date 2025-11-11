@@ -27,6 +27,9 @@ httpx==0.27.0  # Async HTTP client for DocuWare API
 cryptography==44.0.0  # Encryption for credentials
 python-dateutil==2.9.0  # Date parsing for field mapping
 git+https://github.com/Dweliw01/docuware-client.git  # DocuWare client library (OAuth2 support)
+google-api-python-client==2.149.0  # Google Drive API
+google-auth-httplib2==0.2.0  # Google Auth HTTP client
+google-auth-oauthlib==1.2.1  # Google OAuth2 flow
 
 # Testing
 pytest==8.3.4

@@ -211,12 +211,15 @@ class DocuWareConfig(BaseModel):
 
 class GoogleDriveConfig(BaseModel):
     """
-    Google Drive connector configuration (future).
+    Google Drive connector configuration.
+    Stores OAuth2 credentials and folder preferences.
     """
-    access_token: str
-    refresh_token: str
-    folder_id: Optional[str] = None
-    folder_name: Optional[str] = None
+    refresh_token: str  # OAuth2 refresh token
+    client_id: str  # OAuth2 client ID
+    client_secret: str  # OAuth2 client secret
+    root_folder_name: Optional[str] = "DocuFlow"  # Root folder name in Drive
+    root_folder_id: Optional[str] = None  # Cached root folder ID
+    auto_create_folders: bool = True  # Auto-create category subfolders
 
 
 class OneDriveConfig(BaseModel):

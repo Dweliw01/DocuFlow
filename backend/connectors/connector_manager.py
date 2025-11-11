@@ -7,8 +7,9 @@ from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).parent.parent))
 
-from models import ConnectorType, ConnectorConfig, ExtractedData, UploadResult
+from models import ConnectorType, ConnectorConfig, ExtractedData, UploadResult, DocumentCategory
 from connectors.docuware_connector import DocuWareConnector
+from connectors.google_drive_connector import GoogleDriveConnector
 
 
 class ConnectorManager:
@@ -20,8 +21,8 @@ class ConnectorManager:
     def __init__(self):
         """Initialize connector manager with available connectors."""
         self.docuware_connector = DocuWareConnector()
+        self.google_drive_connector = GoogleDriveConnector()
         # Future connectors:
-        # self.google_drive_connector = GoogleDriveConnector()
         # self.onedrive_connector = OneDriveConnector()
 
     async def upload_document(
@@ -29,7 +30,8 @@ class ConnectorManager:
         file_path: str,
         extracted_data: ExtractedData,
         config: ConnectorConfig,
-        decrypted_password: Optional[str] = None
+        decrypted_password: Optional[str] = None,
+        category: DocumentCategory = DocumentCategory.OTHER
     ) -> UploadResult:
         """
         Upload document to configured connector.
@@ -60,11 +62,12 @@ class ConnectorManager:
                 )
 
             elif config.connector_type == ConnectorType.GOOGLE_DRIVE:
-                # Future implementation
-                return UploadResult(
-                    success=False,
-                    message="Google Drive connector not yet implemented",
-                    error="Coming soon"
+                return await self._upload_to_google_drive(
+                    file_path,
+                    extracted_data,
+                    category,
+                    config.google_drive,
+                    decrypted_password
                 )
 
             elif config.connector_type == ConnectorType.ONEDRIVE:
@@ -172,6 +175,79 @@ class ConnectorManager:
             return UploadResult(
                 success=False,
                 message="DocuWare upload error",
+                error=str(e)
+            )
+
+    async def _upload_to_google_drive(
+        self,
+        file_path: str,
+        extracted_data: ExtractedData,
+        category: DocumentCategory,
+        google_drive_config,
+        decrypted_password: Optional[str]
+    ) -> UploadResult:
+        """
+        Upload document to Google Drive.
+
+        Args:
+            file_path: Document file path
+            extracted_data: Extracted data
+            category: Document category for folder organization
+            google_drive_config: Google Drive configuration
+            decrypted_password: Decrypted refresh token (not used yet for MVP)
+
+        Returns:
+            UploadResult
+        """
+        try:
+            # Prepare credentials
+            credentials = {
+                "refresh_token": google_drive_config.refresh_token,
+                "client_id": google_drive_config.client_id,
+                "client_secret": google_drive_config.client_secret
+            }
+
+            # Authenticate if not already
+            if not self.google_drive_connector.service:
+                authenticated = await self.google_drive_connector.authenticate(credentials)
+                if not authenticated:
+                    return UploadResult(
+                        success=False,
+                        message="Google Drive authentication failed",
+                        error="Failed to authenticate with Google Drive"
+                    )
+
+            # Prepare storage config
+            storage_config = {
+                "root_folder_name": google_drive_config.root_folder_name or "DocuFlow"
+            }
+
+            # Upload document
+            result = await self.google_drive_connector.upload_document(
+                pdf_path=Path(file_path),
+                extracted_data=extracted_data,
+                category=category,
+                storage_config=storage_config
+            )
+
+            if result:
+                return UploadResult(
+                    success=True,
+                    document_id=result['file_id'],
+                    url=result.get('web_view_link'),
+                    message=f"Uploaded to Google Drive: {result['folder_path']}{result['filename']}"
+                )
+            else:
+                return UploadResult(
+                    success=False,
+                    message="Google Drive upload failed",
+                    error="Upload returned None"
+                )
+
+        except Exception as e:
+            return UploadResult(
+                success=False,
+                message="Google Drive upload error",
                 error=str(e)
             )
 

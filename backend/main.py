@@ -9,6 +9,8 @@ from routes import upload
 from routes import connector_routes
 from config import settings
 import os
+import logging
+import sys
 
 # Create FastAPI application
 app = FastAPI(
@@ -62,8 +64,27 @@ async def health_check():
 async def startup_event():
     """
     Run on application startup.
-    Print configuration and status information.
+    Configure logging and print configuration info.
     """
+    # Configure logging to output to console with colored formatting
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    # Set specific log levels for different modules
+    logging.getLogger('uvicorn.access').setLevel(logging.WARNING)  # Reduce uvicorn noise
+    logging.getLogger('uvicorn.error').setLevel(logging.INFO)
+
+    # Application loggers
+    logging.getLogger('backend.connectors').setLevel(logging.INFO)
+    logging.getLogger('backend.services').setLevel(logging.INFO)
+    logging.getLogger('backend.routes').setLevel(logging.INFO)
+
     print("\n" + "=" * 60)
     print("Document Digitization MVP")
     print("=" * 60)
@@ -73,6 +94,7 @@ async def startup_event():
     print(f"OCR: {'Google Vision' if settings.use_google_vision else 'Tesseract (free)'}")
     print(f"Max file size: {settings.max_file_size}MB")
     print(f"Concurrent processing: {settings.max_concurrent_processing}")
+    print(f"Logging: INFO level enabled")
     print("=" * 60 + "\n")
 
 

@@ -198,15 +198,6 @@ async function pollBatchStatus() {
 
             const data = await response.json();
 
-            // Debug: Log what we're receiving
-            console.log('Status update:', {
-                processed: data.processed_files,
-                total: data.total_files,
-                lastProcessed: lastProcessedCount,
-                resultsLength: data.results ? data.results.length : 0,
-                status: data.status
-            });
-
             // Update progress bar (20% reserved for upload, 70% for processing, 10% for organizing)
             const processingProgress = (data.processed_files / data.total_files) * 70;
             const totalProgress = 20 + processingProgress;
@@ -217,9 +208,7 @@ async function pollBatchStatus() {
 
             // Show newly processed files as console output
             if (data.results && data.results.length > lastProcessedCount) {
-                console.log('✨ New results found!', data.results.length - lastProcessedCount);
                 const newResults = data.results.slice(lastProcessedCount);
-                console.log('New results array:', newResults);
                 newResults.forEach(result => {
                     if (result.error) {
                         addProcessingLog(`❌ ${result.filename} - Error: ${result.error}`, 'error');
@@ -228,9 +217,6 @@ async function pollBatchStatus() {
                     }
                 });
                 lastProcessedCount = data.results.length;
-                console.log(`Updated lastProcessedCount to: ${lastProcessedCount}`);
-            } else {
-                console.log('No new results. lastProcessedCount:', lastProcessedCount, 'results length:', data.results ? data.results.length : 0);
             }
 
             // Check if completed
@@ -259,14 +245,11 @@ async function pollBatchStatus() {
 }
 
 function addProcessingLog(message, type = 'info') {
-    console.log(`[addProcessingLog] ${type.toUpperCase()}: ${message}`);
-
     const logEntry = document.createElement('div');
     logEntry.className = `log-entry log-${type}`;
     logEntry.textContent = message;
 
     processingDetails.appendChild(logEntry);
-    console.log(`[addProcessingLog] Total logs now: ${processingDetails.children.length}`);
 
     // Auto-scroll to bottom
     processingDetails.scrollTop = processingDetails.scrollHeight;
@@ -552,6 +535,3 @@ function resetApp() {
 // ============================================================================
 // Initialization
 // ============================================================================
-
-console.log('Document Digitization Service initialized');
-console.log('Ready to process documents!');

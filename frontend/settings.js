@@ -179,8 +179,6 @@ async function loadFileCabinets() {
             }
         }
 
-        console.log(`Loaded ${state.cabinets.length} file cabinets`);
-
     } catch (error) {
         console.error('Failed to load cabinets:', error);
         showAlert('connection-status', 'error', 'Failed to load file cabinets');
@@ -245,8 +243,6 @@ async function loadStorageDialogs(cabinetId) {
             await loadIndexFields();
         }
 
-        console.log(`Loaded ${state.dialogs.length} storage dialogs`);
-
     } catch (error) {
         console.error('Failed to load dialogs:', error);
         showAlert('connection-status', 'error', 'Failed to load storage dialogs');
@@ -305,8 +301,6 @@ async function loadIndexFields() {
         // Show save button
         document.getElementById('save-section').style.display = 'block';
 
-        console.log(`Loaded ${state.indexFields.length} index fields`);
-
     } catch (error) {
         console.error('Failed to load index fields:', error);
         showAlert('connection-status', 'error', 'Failed to load index fields');
@@ -330,16 +324,43 @@ function displayIndexFields(fields) {
                 </tr>
             </thead>
             <tbody>
-                ${fields.map(field => `
-                    <tr>
-                        <td><strong>${field.name}</strong></td>
-                        <td><span class="field-type">${field.type}</span></td>
-                        <td class="${field.required ? 'field-required' : 'field-optional'}">
-                            ${field.required ? '✓ Yes' : 'No'}
-                        </td>
-                        <td>${field.max_length || '-'}</td>
-                    </tr>
-                `).join('')}
+                ${fields.map(field => {
+                    if (field.is_table_field && field.table_columns) {
+                        // Display table field with nested columns
+                        return `
+                            <tr class="table-field-row">
+                                <td><strong>${field.name}</strong> <span class="table-indicator">📋 Table Field</span></td>
+                                <td><span class="field-type">${field.type}</span></td>
+                                <td class="${field.required ? 'field-required' : 'field-optional'}">
+                                    ${field.required ? '✓ Yes' : 'No'}
+                                </td>
+                                <td>-</td>
+                            </tr>
+                            ${field.table_columns.map(col => `
+                                <tr class="table-column-row">
+                                    <td style="padding-left: 30px;">↳ ${col.label} <span class="column-name">(${col.name})</span></td>
+                                    <td><span class="field-type field-type-small">${col.type}</span></td>
+                                    <td class="${col.required ? 'field-required' : 'field-optional'}">
+                                        ${col.required ? '✓ Yes' : 'No'}
+                                    </td>
+                                    <td>-</td>
+                                </tr>
+                            `).join('')}
+                        `;
+                    } else {
+                        // Regular field
+                        return `
+                            <tr>
+                                <td><strong>${field.name}</strong></td>
+                                <td><span class="field-type">${field.type}</span></td>
+                                <td class="${field.required ? 'field-required' : 'field-optional'}">
+                                    ${field.required ? '✓ Yes' : 'No'}
+                                </td>
+                                <td>${field.max_length || '-'}</td>
+                            </tr>
+                        `;
+                    }
+                }).join('')}
             </tbody>
         </table>
     `;
@@ -354,12 +375,14 @@ function displayIndexFields(fields) {
 function buildFieldSelection(docuwareFields) {
     const container = document.getElementById('field-mapping-container');
 
-    // Filter out system fields
+    // Filter out system fields and separate table fields from regular fields
     const userFields = docuwareFields.filter(field => !field.is_system_field);
+    const regularFields = userFields.filter(field => !field.is_table_field);
+    const tableFields = userFields.filter(field => field.is_table_field);
 
-    // Group fields by required vs optional
-    const requiredFields = userFields.filter(field => field.required);
-    const optionalFields = userFields.filter(field => !field.required);
+    // Group regular fields by required vs optional
+    const requiredFields = regularFields.filter(field => field.required);
+    const optionalFields = regularFields.filter(field => !field.required);
 
     const selectionHtml = `
         <div class="field-selection-container">
@@ -405,8 +428,50 @@ function buildFieldSelection(docuwareFields) {
                 </div>
             ` : ''}
 
+            ${tableFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">Table Fields <span class="field-count">(${tableFields.length})</span></h3>
+                    <p class="field-group-description">Select table field columns to populate with AI-extracted line items</p>
+                    ${tableFields.map(tableField => {
+                        const columns = tableField.table_columns || [];
+                        if (columns.length === 0) {
+                            return `
+                                <div class="table-field-section">
+                                    <h4 class="table-field-name">📋 ${tableField.name}</h4>
+                                    <p class="table-field-description" style="color: #dc3545;">
+                                        ⚠️ No columns found for this table field. The table may be empty in DocuWare.
+                                    </p>
+                                </div>
+                            `;
+                        }
+                        return `
+                            <div class="table-field-section">
+                                <h4 class="table-field-name">📋 ${tableField.name}</h4>
+                                <p class="table-field-description">Select which columns to populate from line item data:</p>
+                                <div class="field-checkboxes table-column-checkboxes">
+                                    ${columns.map(column => `
+                                        <label class="field-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                class="field-checkbox-input table-column-input"
+                                                data-table-field="${tableField.name}"
+                                                data-column-name="${column.name}"
+                                                data-column-label="${column.label}"
+                                                data-column-type="${column.type}"
+                                            >
+                                            <span class="field-name">${column.label}</span>
+                                            <span class="field-badge field-badge-type">${column.type}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : ''}
+
             <div class="field-selection-summary">
-                <strong>Selected:</strong> <span id="selected-field-count">0</span> fields
+                <strong>Selected:</strong> <span id="selected-field-count">0</span> fields/columns
             </div>
         </div>
     `;
@@ -432,7 +497,6 @@ function restoreFieldSelections(selectedFields) {
         const checkbox = document.querySelector(`[data-field-name="${fieldName}"]`);
         if (checkbox) {
             checkbox.checked = true;
-            console.log(`Restored selection: ${fieldName}`);
         }
     });
 }
@@ -454,7 +518,6 @@ function autoMapFields(docuflowFields, docuwareFields) {
 
         if (match) {
             select.value = match.name;
-            console.log(`Auto-mapped: ${dfField} → ${match.name}`);
         }
     });
 }
@@ -562,12 +625,31 @@ async function saveConfiguration() {
                 return;
             }
 
-            // Collect selected fields
-            const selectedFields = Array.from(document.querySelectorAll('.field-checkbox-input:checked'))
+            // Collect selected fields (regular fields only, not table columns)
+            const selectedFields = Array.from(document.querySelectorAll('.field-checkbox-input:checked:not(.table-column-input)'))
                 .map(checkbox => checkbox.dataset.fieldName);
 
-            if (selectedFields.length === 0) {
-                showAlert('connection-status', 'error', 'Please select at least one field');
+            // Collect selected table columns
+            const selectedTableColumns = {};
+            document.querySelectorAll('.table-column-input:checked').forEach(checkbox => {
+                const tableField = checkbox.dataset.tableField;
+                const columnName = checkbox.dataset.columnName;
+                const columnLabel = checkbox.dataset.columnLabel;
+                const columnType = checkbox.dataset.columnType;
+
+                if (!selectedTableColumns[tableField]) {
+                    selectedTableColumns[tableField] = [];
+                }
+
+                selectedTableColumns[tableField].push({
+                    name: columnName,
+                    label: columnLabel,
+                    type: columnType
+                });
+            });
+
+            if (selectedFields.length === 0 && Object.keys(selectedTableColumns).length === 0) {
+                showAlert('connection-status', 'error', 'Please select at least one field or table column');
                 return;
             }
 
@@ -582,7 +664,8 @@ async function saveConfiguration() {
                     cabinet_name: state.selectedCabinet.name,
                     dialog_id: state.selectedDialog.id,
                     dialog_name: state.selectedDialog.name,
-                    selected_fields: selectedFields
+                    selected_fields: selectedFields,
+                    selected_table_columns: selectedTableColumns
                 },
                 google_drive: null,
                 onedrive: null
@@ -622,8 +705,6 @@ async function saveConfiguration() {
                 // Scroll to top to show the configuration display
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 2000);
-
-            console.log('Configuration saved successfully');
         } else {
             showAlert('connection-status', 'error', 'Failed to save configuration');
         }
@@ -647,8 +728,6 @@ async function loadExistingConfig() {
         const config = await response.json();
 
         if (config.connector_type !== 'none' && config.connector_type) {
-            console.log('Existing configuration found:', config.connector_type);
-
             // Display configuration summary
             displayConfigurationSummary(config);
 

@@ -169,16 +169,28 @@ class StorageDialog(BaseModel):
     description: Optional[str] = None
 
 
+class TableColumn(BaseModel):
+    """
+    Column definition for a DocuWare table field.
+    """
+    name: str  # Column field name (e.g., ITEM__PRODUCT_SERVICE)
+    label: str  # Column display label (e.g., ITEM NUMBER)
+    type: str  # Data type (String, Decimal, Int, etc.)
+    required: bool = False
+
+
 class IndexField(BaseModel):
     """
     Document index field in DocuWare (metadata field).
     """
     name: str
-    type: str  # Text, Date, Decimal, Integer, etc.
+    type: str  # Text, Date, Decimal, Integer, Table, etc.
     required: bool
     max_length: Optional[int] = None
     validation: Optional[str] = None
     is_system_field: bool = False  # True for DocuWare system fields (DWDOCID, etc.)
+    is_table_field: bool = False  # True for table fields
+    table_columns: Optional[List['TableColumn']] = None  # Column definitions if this is a table field
 
 
 class DocuWareConfig(BaseModel):
@@ -194,6 +206,7 @@ class DocuWareConfig(BaseModel):
     dialog_id: str
     dialog_name: str
     selected_fields: List[str]  # List of DocuWare field names to extract
+    selected_table_columns: Optional[Dict[str, List[Dict[str, str]]]] = Field(default_factory=dict)  # Table field name -> list of column definitions
 
 
 class GoogleDriveConfig(BaseModel):

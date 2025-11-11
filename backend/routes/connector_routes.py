@@ -17,14 +17,16 @@ from models import (
     IndexField,
     ExtractedData
 )
-from connectors.docuware_connector import DocuWareConnector
+from connectors.connector_manager import get_connector_manager
 from services.encryption_service import get_encryption_service
 from services.field_mapping_service import get_field_mapping_service
 
 router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 
-# Service instances
-docuware_connector = DocuWareConnector()
+# Service instances - use the SAME connector instance as upload routes
+# This prevents creating multiple authentication sessions
+connector_manager = get_connector_manager()
+docuware_connector = connector_manager.docuware_connector
 encryption_service = get_encryption_service()
 field_mapping_service = get_field_mapping_service()
 

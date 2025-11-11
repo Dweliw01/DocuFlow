@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 import asyncio
 import time
+import logging
 from pathlib import Path
 
 import sys
@@ -32,6 +33,8 @@ from services.encryption_service import get_encryption_service
 from connectors.connector_manager import get_connector_manager
 from routes.connector_routes import get_current_config_with_decrypted_password
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 # Create API router
 router = APIRouter()
@@ -133,7 +136,11 @@ async def process_batch(batch_id: str, file_paths: List[str]):
         batch_id: Unique identifier for this batch
         file_paths: List of paths to uploaded PDF files
     """
-    print(f"Starting batch processing: {batch_id} ({len(file_paths)} files)")
+    print(f"\n{'='*60}")
+    print(f"📦 Starting batch processing: {batch_id}")
+    print(f"   Files to process: {len(file_paths)}")
+    print(f"{'='*60}\n")
+    logger.info(f"Starting batch processing: {batch_id} ({len(file_paths)} files)")
     batch_results[batch_id]["status"] = ProcessingStatus.PROCESSING
 
     # Process files with concurrency limit (avoid overwhelming system)
@@ -175,7 +182,7 @@ async def process_batch(batch_id: str, file_paths: List[str]):
         download_url = f"/download/{batch_id}"
         batch_results[batch_id]["zip_path"] = zip_path
     except Exception as e:
-        print(f"Failed to organize documents: {e}")
+        logger.error(f"Failed to organize documents: {e}")
         download_url = None
 
     # Upload documents to configured connector (if any)
@@ -203,7 +210,12 @@ async def process_batch(batch_id: str, file_paths: List[str]):
         "download_url": download_url
     })
 
-    print(f"Batch processing completed: {batch_id} ({successful} successful, {failed} failed)")
+    print(f"\n{'='*60}")
+    print(f"✅ Batch processing completed: {batch_id}")
+    print(f"   ✓ Successful: {successful}")
+    print(f"   ✗ Failed: {failed}")
+    print(f"{'='*60}\n")
+    logger.info(f"Batch processing completed: {batch_id} ({successful} successful, {failed} failed)")
 
 
 async def process_single_document(file_path: str) -> DocumentResult:
@@ -223,7 +235,8 @@ async def process_single_document(file_path: str) -> DocumentResult:
     filename = os.path.basename(file_path)
 
     try:
-        print(f"Processing: {filename}")
+        print(f"⚙️  Processing: {filename}")
+        logger.info(f"Processing: {filename}")
 
         # Step 1: OCR - Extract text from PDF
         extracted_text = await ocr_service.extract_text_from_pdf(file_path)
@@ -234,17 +247,20 @@ async def process_single_document(file_path: str) -> DocumentResult:
 
         # Get selected fields from connector config (if configured)
         selected_fields = None
+        selected_table_columns = None
         config_tuple = get_current_config_with_decrypted_password()
         if config_tuple:
             connector_config, _ = config_tuple
             if connector_config.connector_type == "docuware" and connector_config.docuware:
                 selected_fields = connector_config.docuware.selected_fields
+                selected_table_columns = connector_config.docuware.selected_table_columns
 
         # Step 2: AI Categorization and Data Extraction (dynamic if fields selected)
         category, confidence, extracted_data = await ai_service.categorize_document(
             extracted_text,
             filename,
-            selected_fields=selected_fields
+            selected_fields=selected_fields,
+            selected_table_columns=selected_table_columns
         )
 
         # Create preview (first 500 chars)
@@ -252,7 +268,8 @@ async def process_single_document(file_path: str) -> DocumentResult:
 
         processing_time = time.time() - start_time
 
-        print(f"✓ {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
+        print(f"   ✅ {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
+        logger.info(f"✓ {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
 
         return DocumentResult(
             filename=filename,
@@ -267,7 +284,8 @@ async def process_single_document(file_path: str) -> DocumentResult:
 
     except Exception as e:
         processing_time = time.time() - start_time
-        print(f"✗ {filename} failed: {str(e)}")
+        print(f"   ❌ {filename} failed: {str(e)}")
+        logger.error(f"✗ {filename} failed: {str(e)}")
 
         return DocumentResult(
             filename=filename,
@@ -294,7 +312,7 @@ async def upload_to_connector(results: List[DocumentResult]):
 
     if not config_tuple:
         # No connector configured
-        print("No connector configured - skipping uploads")
+        logger.info("No connector configured - skipping uploads")
         return
 
     config, decrypted_password = config_tuple
@@ -303,7 +321,10 @@ async def upload_to_connector(results: List[DocumentResult]):
         # Connector explicitly set to None
         return
 
-    print(f"Uploading documents to {config.connector_type}...")
+    print(f"\n{'='*60}")
+    print(f"📤 Uploading documents to {config.connector_type}")
+    print(f"{'='*60}\n")
+    logger.info(f"Uploading documents to {config.connector_type}...")
 
     # Upload each successfully processed document
     upload_count = 0
@@ -314,7 +335,8 @@ async def upload_to_connector(results: List[DocumentResult]):
 
         # Skip documents without extracted data
         if result.extracted_data is None:
-            print(f"Skipping {result.filename} - no extracted data")
+            print(f"   ⏭️  Skipping {result.filename} - no extracted data")
+            logger.debug(f"Skipping {result.filename} - no extracted data")
             continue
 
         try:
@@ -331,19 +353,26 @@ async def upload_to_connector(results: List[DocumentResult]):
 
             if upload_result.success:
                 upload_count += 1
-                print(f"✓ Uploaded {result.filename} to {config.connector_type}")
+                print(f"   ✅ Uploaded: {result.filename}")
+                logger.info(f"✓ Uploaded {result.filename} to {config.connector_type}")
             else:
-                print(f"✗ Failed to upload {result.filename}: {upload_result.error}")
+                print(f"   ❌ Upload failed: {result.filename} - {upload_result.error}")
+                logger.warning(f"✗ Failed to upload {result.filename}: {upload_result.error}")
 
         except Exception as e:
-            print(f"✗ Upload error for {result.filename}: {str(e)}")
+            print(f"   ❌ Upload error: {result.filename} - {str(e)}")
+            logger.error(f"✗ Upload error for {result.filename}: {str(e)}")
             result.upload_result = UploadResult(
                 success=False,
                 message="Upload error",
                 error=str(e)
             )
 
-    print(f"Connector upload completed: {upload_count}/{len(results)} documents uploaded")
+    print(f"\n{'='*60}")
+    print(f"📊 Upload Summary")
+    print(f"   Uploaded: {upload_count}/{len(results)} documents")
+    print(f"{'='*60}\n")
+    logger.info(f"Connector upload completed: {upload_count}/{len(results)} documents uploaded")
 
 
 @router.get("/status/{batch_id}", response_model=BatchResultResponse)

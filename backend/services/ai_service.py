@@ -6,11 +6,14 @@ from anthropic import Anthropic
 from typing import Tuple, Optional
 import json
 import sys
+import logging
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models import DocumentCategory, ExtractedData
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -23,9 +26,9 @@ class AIService:
         """Initialize the AI service with Claude."""
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self.model = settings.claude_model
-        print(f"[OK] AI Service initialized with {self.model}")
+        logger.info(f"[OK] AI Service initialized with {self.model}")
 
-    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None, selected_table_columns: Optional[dict] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """
         Categorize document using AI and extract structured data.
 
@@ -33,6 +36,7 @@ class AIService:
             text: Extracted text from the document
             filename: Original filename (provides additional context)
             selected_fields: Optional list of DocuWare field names to extract (if provided, uses dynamic extraction)
+            selected_table_columns: Optional dict of table field names -> column definitions
 
         Returns:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
@@ -40,7 +44,7 @@ class AIService:
         """
         if selected_fields:
             # Use dynamic field extraction based on DocuWare fields
-            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields)
+            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields, selected_table_columns)
         else:
             # Use default extraction
             prompt = self._build_categorization_prompt(text, filename)
@@ -53,7 +57,7 @@ class AIService:
                 return self._parse_categorization_response(response)
 
         except Exception as e:
-            print(f"AI categorization failed: {e}")
+            logger.error(f"AI categorization failed: {e}")
             # Fallback: return "Other" with low confidence and no extracted data
             return DocumentCategory.OTHER, 0.3, None
 
@@ -180,7 +184,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         """
         message = self.client.messages.create(
             model=self.model,
-            max_tokens=2500,  # Increased to handle line items extraction (invoices can have many items)
+            max_tokens=4096,  # Increased to 4096 to handle many line items (invoices can have 50+ items)
             temperature=0.1,  # Low temperature for consistent, focused results
             messages=[
                 {"role": "user", "content": prompt}
@@ -230,14 +234,14 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
                 try:
                     extracted_data = ExtractedData(**data["extracted_data"])
                 except Exception as e:
-                    print(f"Failed to parse extracted_data: {e}")
+                    logger.warning(f"Failed to parse extracted_data: {e}")
                     # Continue without extracted data rather than failing completely
 
             return category, confidence, extracted_data
 
         except Exception as e:
-            print(f"Failed to parse AI response: {e}")
-            print(f"Response was: {response}")
+            logger.error(f"Failed to parse AI response: {e}")
+            logger.debug(f"Response was: {response}")
             # Return safe fallback
             return DocumentCategory.OTHER, 0.3, None
 
@@ -280,7 +284,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         # Default to OTHER if no match
         return DocumentCategory.OTHER
 
-    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list) -> str:
+    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list, selected_table_columns: Optional[dict] = None) -> str:
         """
         Build a dynamic prompt that extracts specific DocuWare fields.
 
@@ -288,6 +292,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
             text: Document text
             filename: Original filename
             selected_fields: List of DocuWare field names to extract
+            selected_table_columns: Optional dict of table field names -> column definitions
 
         Returns:
             Prompt string for Claude
@@ -300,6 +305,39 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         categories_list = ", ".join([cat.value for cat in DocumentCategory])
         fields_list = ", ".join(selected_fields)
 
+        # Debug logging
+        logger.debug(f"AI Extraction - Requested fields: {selected_fields}")
+
+        # Build line item extraction instructions if table columns are selected
+        line_items_instruction = ""
+        if selected_table_columns:
+            logger.debug(f"Building prompt with table columns: {selected_table_columns}")
+            for table_name, columns in selected_table_columns.items():
+                column_names = [col['label'] for col in columns]
+                column_list = ", ".join(column_names)
+                logger.debug(f"Table field '{table_name}' has columns: {column_list}")
+                line_items_instruction = f"""
+7. CRITICAL: This document has line items. Extract ALL line items with the following columns:
+   {column_list}
+
+   For each line item, extract:
+   - description: Product/service description
+   - quantity: Quantity ordered
+   - unit: Unit of measure (EA, boxes, hours, etc.)
+   - unit_price: Price per unit
+   - amount: Line total
+   - sku: Product/SKU code (if present)
+
+   Extract EVERY line item from the document. Do not skip any items."""
+        else:
+            logger.debug("No table columns selected, using default line item extraction")
+            line_items_instruction = """
+7. If this is an invoice or receipt with line items, extract ALL line items with:
+   - description: Product/service description
+   - quantity: Quantity ordered
+   - unit_price: Price per unit
+   - amount: Line total"""
+
         return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract specific fields.
 
 FILENAME: {filename}
@@ -311,53 +349,68 @@ INSTRUCTIONS:
 1. Categorize this document into ONE of the following categories:
    {categories_list}
 
+   IMPORTANT: If the document has any of the following characteristics, categorize it as "Invoice":
+   - Has line items with products/services and amounts
+   - Has vendor/supplier and customer information
+   - Has a total amount or invoice number
+   - Has payment terms or due dates
+
 2. Provide a confidence score between 0.0 and 1.0
 
 3. Extract the following SPECIFIC FIELDS from the document:
    {fields_list}
 
-4. For each field:
+4. CRITICAL: Use the EXACT field names provided above, including any typos, underscores, or unusual formatting
+   - DO NOT fix typos or normalize field names
+   - DO NOT remove trailing underscores
+   - The field names must match EXACTLY as shown above
+   - Example: If the field is "INVOCE_NO_", output "INVOCE_NO_" not "INVOICE_NO"
+   - Example: If the field is "ZIP_", output "ZIP_" not "ZIP"
+
+5. For each field value:
    - Look for the information that best matches the field name
    - If the field name suggests a date (e.g., ORDER_DATE, DUE_DATE, SHIP_DATE), extract in YYYY-MM-DD format
    - If the field suggests an amount (e.g., AMOUNT, TOTAL, PRICE), include currency symbol
    - If the field is not present in the document, set it to null
    - Extract EXACTLY what appears on the document, don't invent data
+   - CRITICAL: For INVOICE fields, look for ANY document identifier, reference number, or order number
 
-5. Field name hints:
+6. Field name hints (but remember to use EXACT field names from instruction 3):
    - VENDOR/SUPPLIER/COMPANY: Who is providing the goods/services
    - CLIENT/CUSTOMER: Who is receiving the goods/services
    - ORDER_DATE/INVOICE_DATE/DATE: Primary document date
    - DUE_DATE/PAYMENT_DATE: When payment is due
    - AMOUNT/TOTAL: Total monetary amount
    - PO_NUMBER/REFERENCE/ORDER_NO: Purchase order or reference number
-   - INVOICE_NO/DOC_NUMBER: Document identifier
+   - INVOICE_NO/INVOICE_NUMBER/INV_NO/DOC_NUMBER: Document identifier number
    - SHIP_DATE/DELIVERY_DATE: Shipping or delivery date
    - TERMS/PAYMENT_TERMS: Payment terms (e.g., "Net 30")
 
-6. ADDITIONALLY, for invoices/receipts: Extract ALL line items with:
-   - description: Product/service description
-   - quantity: Quantity ordered
-   - unit_price: Price per unit
-   - amount: Line total
+{line_items_instruction}
 
-7. Respond ONLY with valid JSON in this exact format (no other text):
+8. Respond ONLY with valid JSON in this exact format (no other text):
 {{
     "category": "Category Name",
     "confidence": 0.95,
     "extracted_fields": {{
         "FIELD_NAME_1": "extracted value 1",
-        "FIELD_NAME_2": "extracted value 2",
-        "FIELD_NAME_3": null
+        "INVOCE_NO_": "value (keep exact field name with typo and underscore)",
+        "ZIP_": "value (keep trailing underscore)",
+        "CUSTOMER_P_O__DELIVERY_ADDRES": "value (keep double underscore and missing S)"
     }},
     "line_items": [
         {{
             "description": "Product Name",
             "quantity": "10",
+            "unit": "EA",
             "unit_price": "$25.00",
-            "amount": "$250.00"
+            "amount": "$250.00",
+            "sku": "SKU-123"
         }}
     ]
 }}
+
+CRITICAL: The keys in "extracted_fields" MUST match the exact field names from instruction 3, including any typos or unusual formatting.
 
 DO NOT include markdown code blocks or any other formatting. Output only the JSON object."""
 
@@ -381,6 +434,11 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
 
             data = json.loads(response)
 
+            # Debug logging
+            logger.debug(f"AI Response - Category: {data.get('category')}, Confidence: {data.get('confidence')}")
+            logger.debug(f"Extracted fields: {list(data.get('extracted_fields', {}).keys())}")
+            logger.debug(f"Number of line items: {len(data.get('line_items', []))}")
+
             # Extract category
             category_str = data.get("category", "Other")
             category = self._match_category(category_str)
@@ -396,6 +454,10 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
             # BUT ALSO keep them in other_data with original field names for DocuWare upload
             mapped_data = {}
             other_data = extracted_fields.copy()  # Keep all original fields for DocuWare
+
+            # Debug: Show which fields have values
+            fields_with_values = {k: v for k, v in extracted_fields.items() if v is not None and v != ""}
+            logger.debug(f"Fields with values: {fields_with_values}")
 
             for field_name, value in extracted_fields.items():
                 field_upper = field_name.upper()
@@ -436,8 +498,13 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
                 try:
                     from models import LineItem
                     line_items = [LineItem(**item) for item in line_items_raw]
+                    logger.debug(f"Successfully parsed {len(line_items)} line items")
+                    # Show first line item as sample
+                    if line_items:
+                        logger.debug(f"Sample line item: {line_items[0].dict()}")
                 except Exception as e:
-                    print(f"Failed to parse line items: {e}")
+                    logger.warning(f"Failed to parse line items: {e}")
+                    logger.debug(f"Raw line items: {line_items_raw}")
 
             # Create ExtractedData with:
             # - Mapped fields for preview display
@@ -449,7 +516,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
             return category, confidence, extracted_data
 
         except Exception as e:
-            print(f"Failed to parse dynamic extraction response: {e}")
-            print(f"Response was: {response}")
+            logger.error(f"Failed to parse dynamic extraction response: {e}")
+            logger.debug(f"Response was: {response}")
             # Return safe fallback
             return DocumentCategory.OTHER, 0.3, None

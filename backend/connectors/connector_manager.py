@@ -120,14 +120,19 @@ class ConnectorManager:
             storage_config = {
                 "cabinet_id": docuware_config.cabinet_id,
                 "dialog_id": docuware_config.dialog_id,
-                "selected_fields": docuware_config.selected_fields
+                "selected_fields": docuware_config.selected_fields,
+                "selected_table_columns": docuware_config.selected_table_columns or {}
             }
 
             # Extract metadata - use other_data if available (dynamic extraction)
             # Otherwise fall back to standard fields
             if extracted_data and extracted_data.other_data:
                 # Dynamic extraction - data is already in DocuWare field names
-                metadata = extracted_data.other_data
+                metadata = extracted_data.other_data.copy()
+
+                # Add line items if present (convert from LineItem objects to dicts)
+                if extracted_data.line_items:
+                    metadata['line_items'] = [item.dict() for item in extracted_data.line_items]
             else:
                 # Legacy fallback - use standard extracted data
                 metadata = extracted_data.dict(exclude_none=True) if extracted_data else {}

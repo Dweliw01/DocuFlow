@@ -413,26 +413,53 @@ function buildFieldSelection(docuwareFields) {
     const requiredFields = regularFields.filter(field => field.required);
     const optionalFields = regularFields.filter(field => !field.required);
 
+    // Helper function to get confidence badge
+    const getConfidenceBadge = (fieldName) => {
+        const confidence = state.confidenceScores[fieldName];
+        if (!confidence) return '';
+
+        if (confidence >= 0.9) {
+            return `<span class="confidence-badge confidence-high" title="High confidence match (${Math.round(confidence * 100)}%)">✓ ${Math.round(confidence * 100)}%</span>`;
+        } else if (confidence >= 0.7) {
+            return `<span class="confidence-badge confidence-medium" title="Medium confidence match (${Math.round(confidence * 100)}%)">~ ${Math.round(confidence * 100)}%</span>`;
+        } else {
+            return `<span class="confidence-badge confidence-low" title="Low confidence match (${Math.round(confidence * 100)}%)">? ${Math.round(confidence * 100)}%</span>`;
+        }
+    };
+
+    // Helper to check if field is suggested (has good confidence)
+    const isSuggested = (fieldName) => {
+        return Object.values(state.fieldSuggestions).includes(fieldName);
+    };
+
     const selectionHtml = `
         <div class="field-selection-container">
             ${requiredFields.length > 0 ? `
                 <div class="field-group">
-                    <h3 class="field-group-title">Required Fields <span class="field-count">(${requiredFields.length})</span></h3>
+                    <h3 class="field-group-title">
+                        Required Fields <span class="field-count">(${requiredFields.length})</span>
+                        ${requiredFields.length > 0 ? '<span class="info-icon" title="These fields must be filled for DocuWare">ℹ️</span>' : ''}
+                    </h3>
                     <p class="field-group-description">These fields are required by DocuWare and should be extracted from documents</p>
                     <div class="field-checkboxes">
-                        ${requiredFields.map(field => `
-                            <label class="field-checkbox">
+                        ${requiredFields.map(field => {
+                            const suggested = isSuggested(field.name);
+                            const confidenceBadge = getConfidenceBadge(field.name);
+                            return `
+                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
                                 <input
                                     type="checkbox"
                                     class="field-checkbox-input"
                                     data-field-name="${field.name}"
                                     data-required="true"
-                                    checked
+                                    ${suggested ? 'checked' : ''}
                                 >
                                 <span class="field-name">${field.name}</span>
                                 <span class="field-badge field-badge-required">Required</span>
+                                ${confidenceBadge}
+                                ${suggested ? '<span class="suggested-icon" title="AI will likely find this field">✨</span>' : ''}
                             </label>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             ` : ''}
@@ -442,17 +469,23 @@ function buildFieldSelection(docuwareFields) {
                     <h3 class="field-group-title">Optional Fields <span class="field-count">(${optionalFields.length})</span></h3>
                     <p class="field-group-description">Select which optional fields AI should try to extract</p>
                     <div class="field-checkboxes">
-                        ${optionalFields.map(field => `
-                            <label class="field-checkbox">
+                        ${optionalFields.map(field => {
+                            const suggested = isSuggested(field.name);
+                            const confidenceBadge = getConfidenceBadge(field.name);
+                            return `
+                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
                                 <input
                                     type="checkbox"
                                     class="field-checkbox-input"
                                     data-field-name="${field.name}"
                                     data-required="false"
+                                    ${suggested ? 'checked' : ''}
                                 >
                                 <span class="field-name">${field.name}</span>
+                                ${confidenceBadge}
+                                ${suggested ? '<span class="suggested-icon" title="AI will likely find this field">✨</span>' : ''}
                             </label>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             ` : ''}
@@ -623,6 +656,30 @@ function validateMapping() {
 }
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+function validateRequiredFields(selectedFields) {
+    // Check which required fields are NOT selected
+    const missingRequired = state.requiredFields.filter(reqField =>
+        !selectedFields.includes(reqField)
+    );
+
+    return {
+        valid: missingRequired.length === 0,
+        missingRequired: missingRequired
+    };
+}
+
+async function showValidationWarning(missingFields) {
+    const fieldList = missingFields.map(f => `• ${f}`).join('\n');
+
+    const message = `⚠️ Warning: The following REQUIRED fields are not selected:\n\n${fieldList}\n\nDocuWare requires these fields to be filled. Documents without these fields may fail to upload.\n\nDo you want to continue anyway?`;
+
+    return confirm(message);
+}
+
+// ============================================================================
 // Save Configuration
 // ============================================================================
 
@@ -680,6 +737,15 @@ async function saveConfiguration() {
             if (selectedFields.length === 0 && Object.keys(selectedTableColumns).length === 0) {
                 showAlert('connection-status', 'error', 'Please select at least one field or table column');
                 return;
+            }
+
+            // Validate required fields
+            const validation = validateRequiredFields(selectedFields);
+            if (!validation.valid) {
+                const proceed = await showValidationWarning(validation.missingRequired);
+                if (!proceed) {
+                    return; // User cancelled
+                }
             }
 
             // Build DocuWare config

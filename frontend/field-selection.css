@@ -100,3 +100,137 @@
     font-weight: 700;
     color: var(--primary-700);
 }
+
+/* Confidence Score Badges */
+.confidence-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    margin-left: 0.5rem;
+    white-space: nowrap;
+}
+
+.confidence-high {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+.confidence-medium {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+}
+
+.confidence-low {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+/* Suggested Fields Highlighting */
+.field-suggested {
+    background: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+    border-color: #fbbf24 !important;
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1);
+}
+
+.field-suggested:hover {
+    border-color: #f59e0b !important;
+    background: linear-gradient(135deg, #fde68a 0%, #fef3c7 100%);
+}
+
+.suggested-icon {
+    margin-left: 0.5rem;
+    font-size: 1rem;
+    animation: sparkle 2s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+    }
+}
+
+/* Info Icon */
+.info-icon {
+    display: inline-block;
+    margin-left: 0.5rem;
+    cursor: help;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.info-icon:hover {
+    opacity: 1;
+}
+
+/* Field Type Badges */
+.field-badge-type {
+    background: var(--gray-100);
+    color: var(--gray-700);
+    margin-left: 0.5rem;
+}
+
+/* Table Field Sections */
+.table-field-section {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md);
+}
+
+.table-field-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin-bottom: 0.5rem;
+}
+
+.table-field-description {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    margin-bottom: 0.75rem;
+}
+
+.table-column-checkboxes {
+    padding-left: 1rem;
+}
+
+.table-indicator {
+    font-size: 0.75rem;
+    color: var(--primary-600);
+    margin-left: 0.5rem;
+}
+
+/* Required Fields Warning */
+.required-fields-warning {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #fef2f2;
+    border: 2px solid #fca5a5;
+    border-radius: var(--radius-md);
+    color: #991b1b;
+}
+
+.required-fields-warning strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.required-fields-warning ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.required-fields-warning li {
+    margin-bottom: 0.25rem;
+}

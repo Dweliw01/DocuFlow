@@ -345,7 +345,8 @@ async def upload_to_connector(results: List[DocumentResult]):
                 file_path=result.processed_path,
                 extracted_data=result.extracted_data,
                 config=config,
-                decrypted_password=decrypted_password
+                decrypted_password=decrypted_password,
+                category=result.category  # Pass the AI-detected category for folder organization
             )
 
             # Store upload result

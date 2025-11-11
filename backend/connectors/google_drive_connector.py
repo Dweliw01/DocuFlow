@@ -200,6 +200,15 @@ class GoogleDriveConnector:
             Folder ID or None if failed
         """
         try:
+            # Handle both enum and string values
+            if isinstance(category, str):
+                # Convert string to enum
+                try:
+                    category = DocumentCategory(category)
+                except ValueError:
+                    # If invalid category string, default to OTHER
+                    category = DocumentCategory.OTHER
+
             # Check cache first
             cache_key = f"{self.root_folder_id}_{category.value}"
             if cache_key in self.folder_cache:
@@ -366,6 +375,13 @@ class GoogleDriveConnector:
             Dict with file_id, web_view_link, and folder_path, or None if failed
         """
         try:
+            # Handle both enum and string values for category
+            if isinstance(category, str):
+                try:
+                    category = DocumentCategory(category)
+                except ValueError:
+                    category = DocumentCategory.OTHER
+
             if not self.service:
                 logger.error("Not authenticated to Google Drive")
                 return None
@@ -383,7 +399,9 @@ class GoogleDriveConnector:
             folder_id = await self.get_or_create_category_folder(category)
 
             if not folder_id:
-                logger.error(f"Failed to get/create category folder for {category.value}")
+                # Handle both enum and string for logging
+                cat_name = category.value if hasattr(category, 'value') else str(category)
+                logger.error(f"Failed to get/create category folder for {cat_name}")
                 return None
 
             # Generate filename
@@ -504,9 +522,12 @@ class GoogleDriveConnector:
         Returns:
             Dict of custom app properties
         """
+        # Handle both enum and string values for category
+        category_str = category.value if hasattr(category, 'value') else str(category)
+
         metadata = {
             'docuflow_version': '1.0',
-            'category': category.value,
+            'category': category_str,
             'processed_timestamp': datetime.now().isoformat()
         }
 

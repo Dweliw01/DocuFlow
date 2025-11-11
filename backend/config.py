@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Google Drive OAuth
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str = "http://localhost:8000/api/connectors/google-drive/oauth-callback"
+
     class Config:
         """Pydantic configuration"""
         env_file = ".env"

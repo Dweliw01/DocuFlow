@@ -124,11 +124,11 @@
                         </div>
                     </label>
 
-                    <label class="radio-option radio-option-disabled">
-                        <input type="radio" name="connector" value="google_drive" disabled>
+                    <label class="radio-option">
+                        <input type="radio" name="connector" value="google_drive">
                         <div class="radio-content">
                             <span class="radio-label">Google Drive</span>
-                            <span class="radio-description">Coming soon - Upload to Google Drive</span>
+                            <span class="radio-description">Upload documents to Google Drive with auto-organized folders</span>
                         </div>
                     </label>
 
@@ -173,6 +173,60 @@
                 </button>
 
                 <div id="connection-status" class="alert" style="display: none;"></div>
+            </div>
+
+            <!-- Section: Google Drive Configuration (hidden by default) -->
+            <div id="google-drive-config" class="settings-section" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">📁 Google Drive Configuration</h2>
+                    <p class="section-description">Connect to your Google Drive account</p>
+                </div>
+
+                <div class="info-banner">
+                    <span class="info-icon">ℹ️</span>
+                    <div>
+                        <strong>OAuth2 Setup Required</strong>
+                        <p>You'll need OAuth2 credentials from Google Cloud Console. Documents will be organized in folders like: DocuFlow/Invoices/, DocuFlow/Contracts/, etc.</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Client ID</label>
+                    <input type="text" id="gdrive-client-id" class="form-input" placeholder="123456789-abc.apps.googleusercontent.com">
+                    <span class="form-hint">OAuth2 Client ID from Google Cloud Console</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Client Secret</label>
+                    <input type="password" id="gdrive-client-secret" class="form-input" placeholder="••••••••">
+                    <span class="form-hint">OAuth2 Client Secret from Google Cloud Console</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Refresh Token</label>
+                    <input type="password" id="gdrive-refresh-token" class="form-input" placeholder="••••••••">
+                    <span class="form-hint">OAuth2 Refresh Token (obtained from OAuth flow)</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Root Folder Name</label>
+                    <input type="text" id="gdrive-folder-name" class="form-input" placeholder="DocuFlow" value="DocuFlow">
+                    <span class="form-hint">Name of the root folder in Google Drive (will be created if doesn't exist)</span>
+                </div>
+
+                <div class="button-group">
+                    <button id="gdrive-test-connection-btn" class="btn btn-secondary">
+                        <span class="btn-icon">🔌</span>
+                        Test Connection
+                    </button>
+
+                    <button id="gdrive-oauth-help-btn" class="btn btn-outline">
+                        <span class="btn-icon">❓</span>
+                        OAuth Setup Help
+                    </button>
+                </div>
+
+                <div id="gdrive-connection-status" class="alert" style="display: none;"></div>
             </div>
 
             <!-- Section: File Cabinet Selection (hidden by default) -->

@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api/connectors", tags=["connectors"])
 # This prevents creating multiple authentication sessions
 connector_manager = get_connector_manager()
 docuware_connector = connector_manager.docuware_connector
+google_drive_connector = connector_manager.google_drive_connector
 encryption_service = get_encryption_service()
 field_mapping_service = get_field_mapping_service()
 
@@ -177,6 +178,115 @@ async def get_docuware_fields(request: DocuWareFieldsRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get fields: {str(e)}")
+
+
+# ============================================================================
+# Google Drive Connector Endpoints
+# ============================================================================
+
+class GoogleDriveCredentials(BaseModel):
+    refresh_token: str
+    client_id: str
+    client_secret: str
+
+
+class GoogleDriveSetupRequest(BaseModel):
+    root_folder_name: str = "DocuFlow"
+
+
+@router.post("/google-drive/test", response_model=ConnectorTestResponse)
+async def test_google_drive_connection(credentials: GoogleDriveCredentials):
+    """
+    Test Google Drive connection with provided OAuth credentials.
+
+    Args:
+        credentials: OAuth2 refresh token, client ID, and client secret
+
+    Returns:
+        ConnectorTestResponse with success status and message
+    """
+    try:
+        creds_dict = credentials.dict()
+        success, message = await google_drive_connector.test_connection(creds_dict)
+
+        return ConnectorTestResponse(
+            success=success,
+            message=message
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+
+
+@router.post("/google-drive/create-folder")
+async def create_google_drive_folder(request: GoogleDriveSetupRequest):
+    """
+    Create or get the DocuFlow root folder in Google Drive.
+
+    Args:
+        request: Root folder configuration
+
+    Returns:
+        Folder information
+    """
+    try:
+        if not google_drive_connector.service:
+            raise HTTPException(status_code=400, detail="Not authenticated to Google Drive")
+
+        folder_id = await google_drive_connector.get_or_create_root_folder(
+            request.root_folder_name
+        )
+
+        if folder_id:
+            return {
+                "success": True,
+                "folder_id": folder_id,
+                "folder_name": request.root_folder_name,
+                "message": f"Root folder '{request.root_folder_name}' ready"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create/get root folder")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Folder creation failed: {str(e)}")
+
+
+@router.get("/google-drive/oauth-url")
+async def get_google_drive_oauth_url():
+    """
+    Get the OAuth2 authorization URL for Google Drive.
+    NOTE: For MVP, this returns instructions for manual OAuth setup.
+    In production, implement proper OAuth flow with redirect_uri.
+
+    Returns:
+        OAuth URL and instructions
+    """
+    try:
+        # In production, you would:
+        # 1. Generate OAuth URL with redirect_uri pointing to your backend
+        # 2. User clicks link, grants access
+        # 3. Google redirects to your callback URL with auth code
+        # 4. Exchange auth code for refresh token
+        # 5. Store refresh token securely
+
+        return {
+            "message": "OAuth2 Setup Instructions",
+            "instructions": [
+                "1. Go to Google Cloud Console (console.cloud.google.com)",
+                "2. Create a new project or select existing one",
+                "3. Enable Google Drive API",
+                "4. Create OAuth 2.0 credentials (Desktop app type)",
+                "5. Download the credentials JSON file",
+                "6. Use the client_id and client_secret from that file",
+                "7. Run OAuth flow to get refresh_token (use google-auth-oauthlib)",
+                "8. Enter the refresh_token, client_id, and client_secret in DocuFlow settings"
+            ],
+            "oauth_url": "https://console.cloud.google.com/apis/credentials",
+            "note": "For MVP, manual OAuth setup required. Production version will have automatic OAuth flow."
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth URL generation failed: {str(e)}")
 
 
 # ============================================================================

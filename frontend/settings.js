@@ -40,8 +40,12 @@ function setupEventListeners() {
         radio.addEventListener('change', handleConnectorChange);
     });
 
-    // Connection test
+    // DocuWare connection test
     document.getElementById('test-connection-btn').addEventListener('click', testConnection);
+
+    // Google Drive buttons
+    document.getElementById('gdrive-test-connection-btn').addEventListener('click', testGoogleDriveConnection);
+    document.getElementById('gdrive-oauth-help-btn').addEventListener('click', showGoogleDriveOAuthHelp);
 
     // Cabinet selection
     document.getElementById('dw-cabinet').addEventListener('change', handleCabinetChange);
@@ -71,6 +75,7 @@ function handleConnectorChange(event) {
 
     // Hide all config sections
     document.getElementById('docuware-config').style.display = 'none';
+    document.getElementById('google-drive-config').style.display = 'none';
     document.getElementById('cabinet-selection').style.display = 'none';
     document.getElementById('index-fields-section').style.display = 'none';
     document.getElementById('field-mapping-section').style.display = 'none';
@@ -79,6 +84,8 @@ function handleConnectorChange(event) {
     // Show relevant section
     if (state.connectorType === 'docuware') {
         document.getElementById('docuware-config').style.display = 'block';
+    } else if (state.connectorType === 'google_drive') {
+        document.getElementById('google-drive-config').style.display = 'block';
     } else if (state.connectorType === 'none') {
         // Show save section for "none" option
         document.getElementById('save-section').style.display = 'block';
@@ -765,6 +772,31 @@ async function saveConfiguration() {
                 google_drive: null,
                 onedrive: null
             };
+        } else if (state.connectorType === 'google_drive') {
+            // Validate Google Drive configuration
+            const clientId = document.getElementById('gdrive-client-id').value.trim();
+            const clientSecret = document.getElementById('gdrive-client-secret').value.trim();
+            const refreshToken = document.getElementById('gdrive-refresh-token').value.trim();
+            const rootFolderName = document.getElementById('gdrive-folder-name').value.trim() || 'DocuFlow';
+
+            if (!clientId || !clientSecret || !refreshToken) {
+                showAlert('gdrive-connection-status', 'error', 'Please complete connection test first');
+                return;
+            }
+
+            // Build Google Drive config
+            config = {
+                connector_type: 'google_drive',
+                docuware: null,
+                google_drive: {
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    refresh_token: refreshToken,  // Will be encrypted by backend
+                    root_folder_name: rootFolderName,
+                    auto_create_folders: true
+                },
+                onedrive: null
+            };
         }
 
         // Save configuration
@@ -973,6 +1005,73 @@ async function clearConfiguration() {
     } catch (error) {
         console.error('Clear configuration error:', error);
         showAlert('connection-status', 'error', 'Error clearing configuration: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Google Drive Connection
+// ============================================================================
+
+async function testGoogleDriveConnection() {
+    const clientId = document.getElementById('gdrive-client-id').value.trim();
+    const clientSecret = document.getElementById('gdrive-client-secret').value.trim();
+    const refreshToken = document.getElementById('gdrive-refresh-token').value.trim();
+
+    // Validation
+    if (!clientId || !clientSecret || !refreshToken) {
+        showAlert('gdrive-connection-status', 'error', 'Please fill in all OAuth2 credentials');
+        return;
+    }
+
+    const btn = document.getElementById('gdrive-test-connection-btn');
+    btn.disabled = true;
+    btn.textContent = 'Testing...';
+
+    try {
+        const response = await fetch('/api/connectors/google-drive/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                client_id: clientId,
+                client_secret: clientSecret,
+                refresh_token: refreshToken
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showAlert('gdrive-connection-status', 'success', '✓ ' + result.message);
+
+            // Show save section
+            document.getElementById('save-section').style.display = 'block';
+        } else {
+            showAlert('gdrive-connection-status', 'error', '✗ ' + result.message);
+        }
+
+    } catch (error) {
+        showAlert('gdrive-connection-status', 'error', 'Connection error: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">🔌</span> Test Connection';
+    }
+}
+
+async function showGoogleDriveOAuthHelp() {
+    try {
+        const response = await fetch('/api/connectors/google-drive/oauth-url');
+        const result = await response.json();
+
+        // Build help message
+        let helpMessage = `${result.message}\n\n`;
+        helpMessage += result.instructions.join('\n') + '\n\n';
+        helpMessage += `Visit: ${result.oauth_url}\n\n`;
+        helpMessage += `${result.note}`;
+
+        alert(helpMessage);
+
+    } catch (error) {
+        alert('Failed to load OAuth help: ' + error.message);
     }
 }
 

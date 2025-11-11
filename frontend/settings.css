@@ -248,6 +248,17 @@
     background: var(--primary-50);
 }
 
+.btn-outline {
+    background: white;
+    color: var(--gray-700);
+    border: 2px solid var(--gray-300);
+}
+
+.btn-outline:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-400);
+}
+
 .btn-large {
     width: 100%;
     padding: var(--space-4) var(--space-6);
@@ -261,6 +272,46 @@
 .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.button-group {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-top: var(--space-4);
+}
+
+/* ============================================================================
+   Info Banner
+   ============================================================================ */
+
+.info-banner {
+    display: flex;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--primary-50);
+    border: 1px solid var(--primary-200);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+}
+
+.info-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.info-banner strong {
+    display: block;
+    color: var(--primary-700);
+    font-weight: 600;
+    margin-bottom: var(--space-1);
+}
+
+.info-banner p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--primary-600);
+    line-height: 1.5;
 }
 
 /* ============================================================================

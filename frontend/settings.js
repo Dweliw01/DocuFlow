@@ -19,7 +19,10 @@ const state = {
     indexFields: [],
     selectedCabinet: null,
     selectedDialog: null,
-    fieldMapping: {}
+    fieldMapping: {},
+    fieldSuggestions: {},
+    confidenceScores: {},
+    requiredFields: []
 };
 
 // ============================================================================
@@ -286,13 +289,16 @@ async function loadIndexFields() {
         const result = await response.json();
         state.indexFields = result.fields || [];
 
+        // Get smart field suggestions with confidence scores
+        await getFieldSuggestions(state.indexFields);
+
         // Display fields table
         displayIndexFields(state.indexFields);
 
         // Show index fields section
         document.getElementById('index-fields-section').style.display = 'block';
 
-        // Build field selection
+        // Build field selection with suggestions
         buildFieldSelection(state.indexFields);
 
         // Show field selection section
@@ -307,6 +313,29 @@ async function loadIndexFields() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<span class="btn-icon">🏷️</span> Load Index Fields';
+    }
+}
+
+async function getFieldSuggestions(fields) {
+    try {
+        const response = await fetch('/api/connectors/field-suggestions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields)
+        });
+
+        const result = await response.json();
+
+        state.fieldSuggestions = result.suggestions || {};
+        state.confidenceScores = result.confidence_scores || {};
+        state.requiredFields = result.required_fields || [];
+
+        console.log(`✨ Found ${result.suggested_field_count} suggested field mappings`);
+    } catch (error) {
+        console.error('Failed to get field suggestions:', error);
+        // Don't fail the whole flow if suggestions fail
+        state.fieldSuggestions = {};
+        state.confidenceScores = {};
     }
 }
 

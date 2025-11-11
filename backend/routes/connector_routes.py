@@ -183,19 +183,70 @@ async def get_docuware_fields(request: DocuWareFieldsRequest):
 # Field Mapping Endpoints
 # ============================================================================
 
+@router.post("/field-suggestions")
+async def get_field_suggestions(request: List[IndexField]):
+    """
+    Get smart field mapping suggestions based on common field name patterns.
+    Used during configuration setup to suggest which fields to select.
+
+    Args:
+        request: List of available DocuWare index fields
+
+    Returns:
+        Dictionary with suggested fields and confidence scores
+    """
+    try:
+        # Common extracted data fields that we typically look for
+        common_source_fields = [
+            'document_type', 'vendor', 'client', 'company', 'person_name',
+            'date', 'due_date', 'amount', 'currency', 'document_number',
+            'reference_number', 'address', 'email', 'phone'
+        ]
+
+        suggestions = {}
+        confidence_scores = {}
+
+        # For each common field, find best matching target field
+        for source_field in common_source_fields:
+            best_match, confidence = field_mapping_service._find_best_match_with_confidence(
+                source_field,
+                request,
+                confidence_threshold=0.5  # Lower threshold for suggestions
+            )
+
+            if best_match:
+                suggestions[source_field] = best_match.name
+                confidence_scores[best_match.name] = confidence
+
+        # Also identify required fields that need attention
+        required_fields = [field.name for field in request if field.required]
+
+        return {
+            "suggestions": suggestions,
+            "confidence_scores": confidence_scores,
+            "required_fields": required_fields,
+            "total_fields": len(request),
+            "suggested_field_count": len(suggestions)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate suggestions: {str(e)}")
+
+
 @router.post("/auto-map")
 async def auto_map_fields(request: AutoMapRequest):
     """
-    Automatically map extracted data fields to target system fields.
+    Automatically map extracted data fields to target system fields with confidence scores.
 
     Args:
         request: Extracted data and target index fields
 
     Returns:
-        Proposed field mapping
+        Proposed field mapping with confidence scores and validation results
     """
     try:
-        mapping = field_mapping_service.auto_map_fields(
+        # Get mapping with confidence scores
+        mapping, confidence_scores = field_mapping_service.auto_map_fields_with_confidence(
             request.extracted_data,
             request.index_fields
         )
@@ -209,6 +260,7 @@ async def auto_map_fields(request: AutoMapRequest):
 
         return {
             "mapping": mapping,
+            "confidence_scores": confidence_scores,
             "is_valid": is_valid,
             "missing_fields": missing_fields
         }

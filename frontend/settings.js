@@ -44,8 +44,8 @@ function setupEventListeners() {
     document.getElementById('test-connection-btn').addEventListener('click', testConnection);
 
     // Google Drive buttons
-    document.getElementById('gdrive-test-connection-btn').addEventListener('click', testGoogleDriveConnection);
-    document.getElementById('gdrive-oauth-help-btn').addEventListener('click', showGoogleDriveOAuthHelp);
+    document.getElementById('gdrive-signin-btn').addEventListener('click', signInWithGoogle);
+    document.getElementById('gdrive-disconnect-btn').addEventListener('click', disconnectGoogleDrive);
 
     // Cabinet selection
     document.getElementById('dw-cabinet').addEventListener('change', handleCabinetChange);
@@ -86,6 +86,8 @@ function handleConnectorChange(event) {
         document.getElementById('docuware-config').style.display = 'block';
     } else if (state.connectorType === 'google_drive') {
         document.getElementById('google-drive-config').style.display = 'block';
+        // Check if already connected
+        checkGoogleDriveStatus();
     } else if (state.connectorType === 'none') {
         // Show save section for "none" option
         document.getElementById('save-section').style.display = 'block';
@@ -773,30 +775,22 @@ async function saveConfiguration() {
                 onedrive: null
             };
         } else if (state.connectorType === 'google_drive') {
-            // Validate Google Drive configuration
-            const clientId = document.getElementById('gdrive-client-id').value.trim();
-            const clientSecret = document.getElementById('gdrive-client-secret').value.trim();
-            const refreshToken = document.getElementById('gdrive-refresh-token').value.trim();
+            // Google Drive config is already saved during OAuth callback
+            // Just update the root folder name if changed
             const rootFolderName = document.getElementById('gdrive-folder-name').value.trim() || 'DocuFlow';
 
-            if (!clientId || !clientSecret || !refreshToken) {
-                showAlert('gdrive-connection-status', 'error', 'Please complete connection test first');
+            // Get current config and update folder name
+            const currentConfigResponse = await fetch('/api/connectors/config');
+            const currentConfig = await currentConfigResponse.json();
+
+            if (!currentConfig.google_drive) {
+                showAlert('gdrive-connection-status', 'error', 'Please sign in with Google first');
                 return;
             }
 
-            // Build Google Drive config
-            config = {
-                connector_type: 'google_drive',
-                docuware: null,
-                google_drive: {
-                    client_id: clientId,
-                    client_secret: clientSecret,
-                    refresh_token: refreshToken,  // Will be encrypted by backend
-                    root_folder_name: rootFolderName,
-                    auto_create_folders: true
-                },
-                onedrive: null
-            };
+            // Update folder name
+            currentConfig.google_drive.root_folder_name = rootFolderName;
+            config = currentConfig;
         }
 
         // Save configuration
@@ -1012,66 +1006,134 @@ async function clearConfiguration() {
 // Google Drive Connection
 // ============================================================================
 
-async function testGoogleDriveConnection() {
-    const clientId = document.getElementById('gdrive-client-id').value.trim();
-    const clientSecret = document.getElementById('gdrive-client-secret').value.trim();
-    const refreshToken = document.getElementById('gdrive-refresh-token').value.trim();
+// ============================================================================
+// Google Drive OAuth Flow
+// ============================================================================
 
-    // Validation
-    if (!clientId || !clientSecret || !refreshToken) {
-        showAlert('gdrive-connection-status', 'error', 'Please fill in all OAuth2 credentials');
+async function checkGoogleDriveStatus() {
+    /**
+     * Check if Google Drive is already connected.
+     * Shows appropriate UI state (connected vs not connected).
+     */
+    try {
+        const response = await fetch('/api/connectors/google-drive/status');
+        const result = await response.json();
+
+        if (result.connected) {
+            // Show connected state
+            document.getElementById('gdrive-not-connected').style.display = 'none';
+            document.getElementById('gdrive-connected').style.display = 'block';
+            document.getElementById('gdrive-folder-name').value = result.root_folder_name || 'DocuFlow';
+
+            // Show save section
+            document.getElementById('save-section').style.display = 'block';
+        } else {
+            // Show not connected state
+            document.getElementById('gdrive-not-connected').style.display = 'block';
+            document.getElementById('gdrive-connected').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to check Google Drive status:', error);
+    }
+}
+
+async function signInWithGoogle() {
+    /**
+     * Initiate Google OAuth flow.
+     * Opens OAuth URL in popup window and handles callback.
+     */
+    const btn = document.getElementById('gdrive-signin-btn');
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+
+    try {
+        // Get OAuth URL from backend
+        const response = await fetch('/api/connectors/google-drive/oauth-start');
+        const result = await response.json();
+
+        if (!result.authorization_url) {
+            throw new Error('Failed to generate OAuth URL');
+        }
+
+        // Open OAuth URL in popup window
+        const width = 600;
+        const height = 700;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+
+        const popup = window.open(
+            result.authorization_url,
+            'Google OAuth',
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+
+        if (!popup) {
+            throw new Error('Popup blocked. Please allow popups for this site.');
+        }
+
+        // Listen for OAuth success message from popup
+        window.addEventListener('message', function oauthMessageHandler(event) {
+            if (event.data.type === 'GOOGLE_OAUTH_SUCCESS') {
+                // Remove listener
+                window.removeEventListener('message', oauthMessageHandler);
+
+                // Close popup if still open
+                if (popup && !popup.closed) {
+                    popup.close();
+                }
+
+                // Show success state
+                document.getElementById('gdrive-not-connected').style.display = 'none';
+                document.getElementById('gdrive-connected').style.display = 'block';
+                document.getElementById('save-section').style.display = 'block';
+
+                showAlert('gdrive-connection-status', 'success', '✓ Successfully connected to Google Drive!');
+            }
+        });
+
+    } catch (error) {
+        showAlert('gdrive-connection-status', 'error', `Failed to connect: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg class="btn-icon" viewBox="0 0 24 24" width="20" height="20">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
+        `;
+    }
+}
+
+async function disconnectGoogleDrive() {
+    /**
+     * Disconnect Google Drive and clear configuration.
+     */
+    if (!confirm('Are you sure you want to disconnect Google Drive?')) {
         return;
     }
 
-    const btn = document.getElementById('gdrive-test-connection-btn');
-    btn.disabled = true;
-    btn.textContent = 'Testing...';
-
     try {
-        const response = await fetch('/api/connectors/google-drive/test', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                client_id: clientId,
-                client_secret: clientSecret,
-                refresh_token: refreshToken
-            })
+        const response = await fetch('/api/connectors/config', {
+            method: 'DELETE'
         });
 
         const result = await response.json();
 
         if (result.success) {
-            showAlert('gdrive-connection-status', 'success', '✓ ' + result.message);
+            // Reset UI to not connected state
+            document.getElementById('gdrive-not-connected').style.display = 'block';
+            document.getElementById('gdrive-connected').style.display = 'none';
+            document.getElementById('save-section').style.display = 'none';
 
-            // Show save section
-            document.getElementById('save-section').style.display = 'block';
+            showAlert('gdrive-connection-status', 'success', '✓ Disconnected from Google Drive');
         } else {
-            showAlert('gdrive-connection-status', 'error', '✗ ' + result.message);
+            showAlert('gdrive-connection-status', 'error', 'Failed to disconnect');
         }
-
     } catch (error) {
-        showAlert('gdrive-connection-status', 'error', 'Connection error: ' + error.message);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<span class="btn-icon">🔌</span> Test Connection';
-    }
-}
-
-async function showGoogleDriveOAuthHelp() {
-    try {
-        const response = await fetch('/api/connectors/google-drive/oauth-url');
-        const result = await response.json();
-
-        // Build help message
-        let helpMessage = `${result.message}\n\n`;
-        helpMessage += result.instructions.join('\n') + '\n\n';
-        helpMessage += `Visit: ${result.oauth_url}\n\n`;
-        helpMessage += `${result.note}`;
-
-        alert(helpMessage);
-
-    } catch (error) {
-        alert('Failed to load OAuth help: ' + error.message);
+        showAlert('gdrive-connection-status', 'error', `Error: ${error.message}`);
     }
 }
 

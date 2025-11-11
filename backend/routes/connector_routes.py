@@ -6,7 +6,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, List, Optional
 import sys
+import secrets
+import os
 from pathlib import Path
+from datetime import datetime
+from fastapi.responses import RedirectResponse, HTMLResponse
+from google_auth_oauthlib.flow import Flow
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models import (
@@ -184,109 +189,295 @@ async def get_docuware_fields(request: DocuWareFieldsRequest):
 # Google Drive Connector Endpoints
 # ============================================================================
 
-class GoogleDriveCredentials(BaseModel):
-    refresh_token: str
-    client_id: str
-    client_secret: str
+# OAuth state management (in-memory for single user)
+# In production with multiple users, use Redis or database
+oauth_state_storage = {}
 
 
 class GoogleDriveSetupRequest(BaseModel):
     root_folder_name: str = "DocuFlow"
 
 
-@router.post("/google-drive/test", response_model=ConnectorTestResponse)
-async def test_google_drive_connection(credentials: GoogleDriveCredentials):
+@router.get("/google-drive/oauth-start")
+async def start_google_drive_oauth():
     """
-    Test Google Drive connection with provided OAuth credentials.
-
-    Args:
-        credentials: OAuth2 refresh token, client ID, and client secret
+    Start Google Drive OAuth2 flow.
+    Generates authorization URL and redirects user to Google login.
 
     Returns:
-        ConnectorTestResponse with success status and message
+        OAuth authorization URL
     """
     try:
-        creds_dict = credentials.dict()
-        success, message = await google_drive_connector.test_connection(creds_dict)
+        # Get OAuth credentials from environment
+        client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
 
-        return ConnectorTestResponse(
-            success=success,
-            message=message
+        if not client_id or not client_secret:
+            raise HTTPException(
+                status_code=500,
+                detail="Google OAuth credentials not configured. Please set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env file"
+            )
+
+        # Redirect URI (must match what's configured in Google Cloud Console)
+        redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://localhost:8000/api/connectors/google-drive/oauth-callback')
+
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=['https://www.googleapis.com/auth/drive.file']
         )
+        flow.redirect_uri = redirect_uri
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Connection test failed: {str(e)}")
+        # Generate state token for CSRF protection
+        state = secrets.token_urlsafe(32)
+        oauth_state_storage[state] = {
+            'created_at': datetime.now().isoformat()
+        }
 
-
-@router.post("/google-drive/create-folder")
-async def create_google_drive_folder(request: GoogleDriveSetupRequest):
-    """
-    Create or get the DocuFlow root folder in Google Drive.
-
-    Args:
-        request: Root folder configuration
-
-    Returns:
-        Folder information
-    """
-    try:
-        if not google_drive_connector.service:
-            raise HTTPException(status_code=400, detail="Not authenticated to Google Drive")
-
-        folder_id = await google_drive_connector.get_or_create_root_folder(
-            request.root_folder_name
+        # Generate authorization URL
+        authorization_url, _ = flow.authorization_url(
+            access_type='offline',  # Get refresh token
+            include_granted_scopes='true',
+            state=state,
+            prompt='consent'  # Force consent screen to get refresh token
         )
-
-        if folder_id:
-            return {
-                "success": True,
-                "folder_id": folder_id,
-                "folder_name": request.root_folder_name,
-                "message": f"Root folder '{request.root_folder_name}' ready"
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to create/get root folder")
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Folder creation failed: {str(e)}")
-
-
-@router.get("/google-drive/oauth-url")
-async def get_google_drive_oauth_url():
-    """
-    Get the OAuth2 authorization URL for Google Drive.
-    NOTE: For MVP, this returns instructions for manual OAuth setup.
-    In production, implement proper OAuth flow with redirect_uri.
-
-    Returns:
-        OAuth URL and instructions
-    """
-    try:
-        # In production, you would:
-        # 1. Generate OAuth URL with redirect_uri pointing to your backend
-        # 2. User clicks link, grants access
-        # 3. Google redirects to your callback URL with auth code
-        # 4. Exchange auth code for refresh token
-        # 5. Store refresh token securely
 
         return {
-            "message": "OAuth2 Setup Instructions",
-            "instructions": [
-                "1. Go to Google Cloud Console (console.cloud.google.com)",
-                "2. Create a new project or select existing one",
-                "3. Enable Google Drive API",
-                "4. Create OAuth 2.0 credentials (Desktop app type)",
-                "5. Download the credentials JSON file",
-                "6. Use the client_id and client_secret from that file",
-                "7. Run OAuth flow to get refresh_token (use google-auth-oauthlib)",
-                "8. Enter the refresh_token, client_id, and client_secret in DocuFlow settings"
-            ],
-            "oauth_url": "https://console.cloud.google.com/apis/credentials",
-            "note": "For MVP, manual OAuth setup required. Production version will have automatic OAuth flow."
+            "authorization_url": authorization_url,
+            "state": state
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OAuth URL generation failed: {str(e)}")
+        logger.error(f"OAuth start failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start OAuth: {str(e)}")
+
+
+@router.get("/google-drive/oauth-callback")
+async def google_drive_oauth_callback(code: str, state: str):
+    """
+    Handle OAuth2 callback from Google.
+    Exchanges authorization code for tokens and saves configuration.
+
+    Args:
+        code: Authorization code from Google
+        state: State token for CSRF protection
+
+    Returns:
+        HTML page with success message
+    """
+    try:
+        # Verify state token
+        if state not in oauth_state_storage:
+            raise HTTPException(status_code=400, detail="Invalid state token. Please try again.")
+
+        # Remove used state token
+        del oauth_state_storage[state]
+
+        # Get OAuth credentials from environment
+        client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
+        redirect_uri = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://localhost:8000/api/connectors/google-drive/oauth-callback')
+
+        # Create OAuth flow
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": [redirect_uri]
+                }
+            },
+            scopes=['https://www.googleapis.com/auth/drive.file']
+        )
+        flow.redirect_uri = redirect_uri
+
+        # Exchange authorization code for tokens
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+
+        # Save Google Drive configuration
+        global current_connector_config
+        current_connector_config = ConnectorConfig(
+            connector_type="google_drive",
+            google_drive={
+                "refresh_token": credentials.refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "root_folder_name": "DocuFlow",
+                "auto_create_folders": True
+            }
+        )
+
+        # Authenticate the connector with the new tokens
+        creds_dict = {
+            "refresh_token": credentials.refresh_token,
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+        await google_drive_connector.authenticate(creds_dict)
+
+        # Return success page that closes the window and notifies parent
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Google Drive Connected</title>
+            <style>
+                body {
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                }
+                .container {
+                    background: white;
+                    padding: 3rem;
+                    border-radius: 1rem;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 400px;
+                }
+                .success-icon {
+                    font-size: 4rem;
+                    margin-bottom: 1rem;
+                }
+                h1 {
+                    color: #10b981;
+                    margin: 0 0 1rem 0;
+                }
+                p {
+                    color: #6b7280;
+                    margin: 0 0 1.5rem 0;
+                }
+                .close-btn {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    padding: 0.75rem 2rem;
+                    border-radius: 0.5rem;
+                    font-size: 1rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success-icon">✓</div>
+                <h1>Google Drive Connected!</h1>
+                <p>Your Google Drive has been successfully connected to DocuFlow.</p>
+                <button class="close-btn" onclick="closeWindow()">Close Window</button>
+            </div>
+            <script>
+                // Notify parent window if opened in popup
+                if (window.opener) {
+                    window.opener.postMessage({ type: 'GOOGLE_OAUTH_SUCCESS' }, '*');
+                }
+
+                function closeWindow() {
+                    window.close();
+                    // If window doesn't close (some browsers block it), redirect to settings
+                    setTimeout(() => {
+                        window.location.href = '/settings.html';
+                    }, 500);
+                }
+
+                // Auto-close after 3 seconds if opened in popup
+                if (window.opener) {
+                    setTimeout(closeWindow, 3000);
+                }
+            </script>
+        </body>
+        </html>
+        """
+
+        return HTMLResponse(content=html_content)
+
+    except Exception as e:
+        logger.error(f"OAuth callback failed: {str(e)}")
+        # Return error page
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Connection Failed</title>
+            <style>
+                body {{
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
+                    margin: 0;
+                    background: linear-gradient(135deg, #f43f5e 0%, #dc2626 100%);
+                }}
+                .container {{
+                    background: white;
+                    padding: 3rem;
+                    border-radius: 1rem;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    text-align: center;
+                    max-width: 400px;
+                }}
+                .error-icon {{
+                    font-size: 4rem;
+                    margin-bottom: 1rem;
+                }}
+                h1 {{
+                    color: #dc2626;
+                    margin: 0 0 1rem 0;
+                }}
+                p {{
+                    color: #6b7280;
+                    margin: 0 0 1.5rem 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="error-icon">✗</div>
+                <h1>Connection Failed</h1>
+                <p>{str(e)}</p>
+                <button onclick="window.close()" style="padding: 0.75rem 2rem; border-radius: 0.5rem; border: none; background: #dc2626; color: white; cursor: pointer;">Close</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=500)
+
+
+@router.get("/google-drive/status")
+async def get_google_drive_status():
+    """
+    Check if Google Drive is currently connected.
+
+    Returns:
+        Connection status
+    """
+    global current_connector_config
+
+    if current_connector_config and current_connector_config.connector_type == "google_drive":
+        return {
+            "connected": True,
+            "root_folder_name": current_connector_config.google_drive.root_folder_name
+        }
+
+    return {
+        "connected": False
+    }
 
 
 # ============================================================================

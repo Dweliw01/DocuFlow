@@ -274,11 +274,74 @@
     cursor: not-allowed;
 }
 
+.btn-google {
+    background: white;
+    color: #1f2937;
+    border: 2px solid #d1d5db;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    justify-content: center;
+    padding: var(--space-4) var(--space-6);
+    font-size: 1rem;
+}
+
+.btn-google:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-google .btn-icon {
+    width: 20px;
+    height: 20px;
+}
+
 .button-group {
     display: flex;
     gap: var(--space-3);
     flex-wrap: wrap;
     margin-top: var(--space-4);
+}
+
+/* ============================================================================
+   OAuth Connection
+   ============================================================================ */
+
+.oauth-connect-container {
+    text-align: center;
+    padding: var(--space-8) var(--space-4);
+}
+
+.oauth-hint {
+    margin-top: var(--space-3);
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.connection-success {
+    padding: var(--space-4);
+}
+
+.success-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-6);
+    background: var(--success-50);
+    border: 2px solid var(--success-200);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-6);
+}
+
+.success-badge .badge-icon {
+    font-size: 1.5rem;
+    color: var(--success-600);
+}
+
+.success-badge .badge-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--success-700);
 }
 
 /* ============================================================================

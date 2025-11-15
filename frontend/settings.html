@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="settings.css">
     <link rel="stylesheet" href="field-selection.css">
@@ -21,8 +23,8 @@
                     <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
                     <defs>
                         <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
-                            <stop offset="0%" stop-color="#6366f1"/>
-                            <stop offset="100%" stop-color="#8b5cf6"/>
+                            <stop offset="0%" stop-color="#0066cc"/>
+                            <stop offset="100%" stop-color="#0052a3"/>
                         </linearGradient>
                     </defs>
                 </svg>
@@ -30,12 +32,13 @@
             </div>
 
             <div class="nav-links">
-                <a href="/" class="nav-link">Process Documents</a>
+                <a href="/dashboard.html" class="nav-link">Process Documents</a>
                 <a href="/settings.html" class="nav-link nav-link-active">Settings</a>
                 <span class="nav-status">
                     <span class="status-dot"></span>
                     System Online
                 </span>
+                <div id="userInfo" style="display: flex; align-items: center; margin-left: 1rem;"></div>
             </div>
         </div>
     </nav>
@@ -100,7 +103,7 @@
                         </div>
                         <div class="config-row">
                             <span class="config-label">Folder Structure:</span>
-                            <span id="current-folder-structure" class="config-value" style="font-family: 'Courier New', monospace; color: #6366f1;"></span>
+                            <span id="current-folder-structure" class="config-value" style="font-family: 'Courier New', monospace; color: #0066cc;"></span>
                         </div>
                     </div>
                 </div>
@@ -373,7 +376,7 @@
                 <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                         <div style="display: flex; align-items: center;">
-                            <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 8px; padding: 8px; margin-right: 12px;">
+                            <div style="background: #0066cc; border-radius: 8px; padding: 8px; margin-right: 12px;">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                                     <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
                                 </svg>
@@ -400,7 +403,7 @@
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
                                         <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
                                     </svg>
-                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                    <span style="color: #0066cc; font-weight: 600;">DocuFlow</span>
                                 </div>
                                 <div style="padding-left: 12px; margin-bottom: 6px;">
                                     <div style="display: flex; align-items: center;">
@@ -443,7 +446,7 @@
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
                                         <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
                                     </svg>
-                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                    <span style="color: #0066cc; font-weight: 600;">DocuFlow</span>
                                 </div>
                                 <div style="padding-left: 12px; margin-bottom: 6px;">
                                     <div style="display: flex; align-items: center;">
@@ -485,7 +488,7 @@
                         <div style="background: #fafafa; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; transition: all 0.2s;">
                             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                                 <div style="display: flex; align-items: center;">
-                                    <div style="width: 6px; height: 6px; background: #8b5cf6; border-radius: 50%; margin-right: 10px;"></div>
+                                    <div style="width: 6px; height: 6px; background: #0066cc; border-radius: 50%; margin-right: 10px;"></div>
                                     <span style="font-weight: 600; color: #6d28d9; font-size: 14px;">Vendor → Category</span>
                                 </div>
                                 <span style="background: #f5f3ff; color: #6d28d9; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;">CLIENT MGMT</span>
@@ -495,7 +498,7 @@
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="#94a3b8" style="margin-right: 6px;">
                                         <path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/>
                                     </svg>
-                                    <span style="color: #6366f1; font-weight: 600;">DocuFlow</span>
+                                    <span style="color: #0066cc; font-weight: 600;">DocuFlow</span>
                                 </div>
                                 <div style="padding-left: 12px; margin-bottom: 6px;">
                                     <div style="display: flex; align-items: center;">
@@ -517,7 +520,7 @@
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
-                                <svg width="14" height="14" viewBox="0 0 20 20" fill="#8b5cf6" style="margin-right: 6px;">
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="#0066cc" style="margin-right: 6px;">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
                                 </svg>
                                 <span style="color: #6b7280; font-size: 12px;">Ideal for client and vendor relationship management</span>
@@ -603,7 +606,7 @@
     <footer class="footer">
         <div class="footer-container">
             <p class="footer-text">
-                Powered by <strong>Claude Haiku 4.5</strong> AI and <strong>Tesseract OCR</strong>
+                Powered by <strong>Advanced AI</strong> and <strong>OCR Technology</strong>
             </p>
             <p class="footer-links">
                 <a href="/" class="footer-link">Home</a>
@@ -613,6 +616,40 @@
         </div>
     </footer>
 
+    <!-- Auth0 SPA SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+
+    <!-- Authentication utilities -->
+    <script src="auth.js"></script>
+
+    <!-- Settings page script -->
     <script src="settings.js"></script>
+
+    <script>
+        // Check authentication on page load
+        (async () => {
+            console.log('[Settings] Page loading...');
+            console.log('[Settings] Token in localStorage:', localStorage.getItem('auth_token') ? 'EXISTS' : 'MISSING');
+            console.log('[Settings] User in localStorage:', localStorage.getItem('user') ? 'EXISTS' : 'MISSING');
+            console.log('[Settings] Checking authentication...');
+
+            const authenticated = await requireAuth();
+            console.log('[Settings] Authentication result:', authenticated);
+
+            if (authenticated) {
+                console.log('[Settings] User is authenticated, loading config...');
+                await displayUserInfo();
+                // Trigger config load after authentication is confirmed
+                if (typeof loadExistingConfig === 'function') {
+                    await loadExistingConfig();
+                    console.log('[Settings] Config loaded successfully');
+                } else {
+                    console.error('[Settings] loadExistingConfig function not found');
+                }
+            } else {
+                console.log('[Settings] User not authenticated, should redirect to login');
+            }
+        })();
+    </script>
 </body>
 </html>

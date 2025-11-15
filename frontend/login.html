@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - DocuFlow</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== Design System ===== */
+        :root {
+            --primary-600: #0066cc;
+            --primary-700: #0052a3;
+
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-900: #111827;
+
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        /* ===== Base ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--gray-50);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== Login Card ===== */
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: #0066cc;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-icon svg {
+            width: 22px;
+            height: 22px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .login-card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--gray-200);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+        }
+
+        .login-subtitle {
+            font-size: 0.9375rem;
+            color: var(--gray-600);
+        }
+
+        /* ===== Buttons ===== */
+        .login-button {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: white;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            color: var(--gray-700);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            transition: all 0.2s;
+            margin-bottom: 0.75rem;
+        }
+
+        .login-button:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-400);
+        }
+
+        .login-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .google-icon {
+            width: 18px;
+            height: 18px;
+        }
+
+        .auth0-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 1.5rem 0;
+            color: var(--gray-500);
+            font-size: 0.875rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--gray-200);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--gray-300);
+            border-top-color: var(--gray-700);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .button-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .button-content.hidden {
+            display: none;
+        }
+
+        /* ===== Error ===== */
+        .error-message {
+            padding: 0.875rem;
+            background: #fee2e2;
+            color: #991b1b;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* ===== Footer ===== */
+        .login-footer {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .footer-text {
+            font-size: 0.875rem;
+            color: var(--gray-600);
+        }
+
+        .footer-link {
+            color: var(--primary-600);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem;
+            }
+
+            .login-card {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo -->
+        <div class="logo-container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 6h16M4 12h16M4 18h12" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="logo-text">DocuFlow</div>
+            </a>
+        </div>
+
+        <!-- Login Card -->
+        <div class="login-card">
+            <div class="login-header">
+                <h1 class="login-title">Welcome back</h1>
+                <p class="login-subtitle">Sign in to your account to continue</p>
+            </div>
+
+            <!-- Google Sign In -->
+            <button id="googleLoginBtn" class="login-button">
+                <span class="button-content" id="googleContent">
+                    <svg class="google-icon" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span>Continue with Google</span>
+                </span>
+                <span class="loading-spinner" id="googleSpinner" style="display: none;"></span>
+            </button>
+
+            <div class="divider">
+                <span>or</span>
+            </div>
+
+            <!-- Auth0 Sign In -->
+            <button id="auth0LoginBtn" class="login-button">
+                <span class="button-content" id="auth0Content">
+                    <span class="auth0-icon">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </span>
+                    <span>Continue with Auth0</span>
+                </span>
+                <span class="loading-spinner" id="auth0Spinner" style="display: none;"></span>
+            </button>
+
+            <div class="error-message" id="errorMessage"></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <p class="footer-text">
+                Don't have an account? <a href="/" class="footer-link">Start free trial</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Auth0 SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+
+    <script>
+        let auth0Client = null;
+
+        // Initialize Auth0
+        async function initAuth0() {
+            try {
+                const response = await fetch('/api/auth/config');
+                if (!response.ok) {
+                    throw new Error('Failed to load Auth0 configuration');
+                }
+
+                const config = await response.json();
+
+                auth0Client = await auth0.createAuth0Client({
+                    domain: config.domain,
+                    clientId: config.client_id,
+                    authorizationParams: {
+                        redirect_uri: window.location.origin + '/login.html',
+                        audience: config.audience,
+                        scope: 'openid profile email'
+                    },
+                    cacheLocation: 'localstorage',
+                    useRefreshTokens: true
+                });
+
+                // Check if returning from Auth0
+                const query = window.location.search;
+                if (query.includes('code=') && query.includes('state=')) {
+                    await handleRedirectCallback();
+                    return;
+                }
+
+                // Check if already authenticated
+                const isAuthenticated = await auth0Client.isAuthenticated();
+                if (isAuthenticated && localStorage.getItem('auth_token')) {
+                    window.location.href = '/dashboard.html';
+                }
+
+            } catch (error) {
+                console.error('Auth0 initialization error:', error);
+                showError(error.message);
+            }
+        }
+
+        // Handle OAuth callback
+        async function handleRedirectCallback() {
+            showLoading('google');
+            try {
+                await auth0Client.handleRedirectCallback();
+                const user = await auth0Client.getUser();
+
+                // Get access token (required for API calls)
+                let token;
+                try {
+                    token = await auth0Client.getTokenSilently();
+                } catch (tokenError) {
+                    console.error('Failed to get access token:', tokenError);
+                    showError('Authentication error: Unable to get access token. Please try again.');
+                    hideLoading('google');
+                    return;
+                }
+
+                localStorage.setItem('auth_token', token);
+                localStorage.setItem('user', JSON.stringify(user));
+
+                // Check if user needs onboarding
+                try {
+                    const response = await fetch('/api/organizations/check-onboarding', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.needs_onboarding) {
+                            window.location.href = '/onboarding.html';
+                        } else {
+                            window.location.href = '/dashboard.html';
+                        }
+                    } else {
+                        // If check fails, default to onboarding
+                        window.location.href = '/onboarding.html';
+                    }
+                } catch (error) {
+                    console.error('Onboarding check error:', error);
+                    // Default to onboarding if check fails
+                    window.location.href = '/onboarding.html';
+                }
+            } catch (error) {
+                console.error('Callback error:', error);
+                showError('Login failed: ' + error.message);
+                hideLoading('google');
+            }
+        }
+
+        // Google login
+        document.getElementById('googleLoginBtn').addEventListener('click', async () => {
+            showLoading('google');
+            try {
+                await auth0Client.loginWithRedirect({
+                    authorizationParams: {
+                        redirect_uri: window.location.origin + '/login.html',
+                        connection: 'google-oauth2'
+                    }
+                });
+            } catch (error) {
+                console.error('Google login error:', error);
+                showError('Failed to sign in with Google');
+                hideLoading('google');
+            }
+        });
+
+        // Auth0 login
+        document.getElementById('auth0LoginBtn').addEventListener('click', async () => {
+            showLoading('auth0');
+            try {
+                await auth0Client.loginWithRedirect({
+                    authorizationParams: {
+                        redirect_uri: window.location.origin + '/login.html'
+                    }
+                });
+            } catch (error) {
+                console.error('Auth0 login error:', error);
+                showError('Failed to sign in with Auth0');
+                hideLoading('auth0');
+            }
+        });
+
+        function showLoading(type) {
+            const content = document.getElementById(type + 'Content');
+            const spinner = document.getElementById(type + 'Spinner');
+            const button = document.getElementById(type + 'LoginBtn');
+
+            content.style.display = 'none';
+            spinner.style.display = 'inline-block';
+            button.disabled = true;
+        }
+
+        function hideLoading(type) {
+            const content = document.getElementById(type + 'Content');
+            const spinner = document.getElementById(type + 'Spinner');
+            const button = document.getElementById(type + 'LoginBtn');
+
+            content.style.display = 'flex';
+            spinner.style.display = 'none';
+            button.disabled = false;
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.add('active');
+        }
+
+        initAuth0();
+    </script>
+</body>
+</html>

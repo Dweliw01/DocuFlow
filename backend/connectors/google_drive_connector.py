@@ -39,6 +39,22 @@ CATEGORY_FOLDERS = {
 }
 
 
+def escape_drive_query_value(value: str) -> str:
+    """
+    Escape single quotes in folder/file names for Google Drive API queries.
+
+    Google Drive queries use single quotes to delimit string values.
+    Any single quote in the actual value must be escaped with a backslash.
+
+    Args:
+        value: The folder or file name to escape
+
+    Returns:
+        Escaped string safe for use in Drive API queries
+    """
+    return value.replace("'", "\\'")
+
+
 class GoogleDriveConnector:
     """
     Connector for Google Drive integration.
@@ -151,8 +167,9 @@ class GoogleDriveConnector:
             Folder ID or None if failed
         """
         try:
-            # Search for existing folder
-            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            # Search for existing folder (escape single quotes in folder name)
+            escaped_name = escape_drive_query_value(folder_name)
+            query = f"name='{escaped_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
             results = self.service.files().list(
                 q=query,
                 spaces='drive',
@@ -217,8 +234,9 @@ class GoogleDriveConnector:
             # Get category folder name
             folder_name = CATEGORY_FOLDERS.get(category, "Other")
 
-            # Search for existing subfolder
-            query = f"name='{folder_name}' and '{self.root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            # Search for existing subfolder (escape single quotes in folder name)
+            escaped_name = escape_drive_query_value(folder_name)
+            query = f"name='{escaped_name}' and '{self.root_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
             results = self.service.files().list(
                 q=query,
                 spaces='drive',
@@ -372,7 +390,9 @@ class GoogleDriveConnector:
             return CATEGORY_FOLDERS.get(category, "Other")
 
         elif level == 'vendor':
-            return extracted_data.vendor or None
+            vendor = extracted_data.vendor
+            logger.debug(f"Extracted vendor: {vendor}")
+            return vendor or None
 
         elif level == 'client':
             return extracted_data.client or None
@@ -386,9 +406,12 @@ class GoogleDriveConnector:
                     # Extract year from date (handle various formats)
                     date_str = extracted_data.date.split('T')[0] if 'T' in extracted_data.date else extracted_data.date
                     year = date_str.split('-')[0]
+                    logger.debug(f"Extracted year: {year} (from date: {extracted_data.date})")
                     return year
                 except:
+                    logger.warning(f"Failed to extract year from date: {extracted_data.date}, using current year")
                     return datetime.now().strftime('%Y')
+            logger.debug(f"No date found, using current year: {datetime.now().strftime('%Y')}")
             return datetime.now().strftime('%Y')
 
         elif level == 'year_month':
@@ -403,7 +426,9 @@ class GoogleDriveConnector:
             return datetime.now().strftime('%Y-%m')
 
         elif level == 'document_type':
-            return extracted_data.document_type or category.value
+            doc_type = extracted_data.document_type or category.value
+            logger.debug(f"Extracted document_type: {doc_type} (from AI: {extracted_data.document_type}, category fallback: {category.value})")
+            return doc_type
 
         elif level == 'person_name':
             return extracted_data.person_name or None
@@ -432,10 +457,12 @@ class GoogleDriveConnector:
             Final folder ID or None if failed
         """
         try:
-            # Get folder structure configuration
-            primary_level = storage_config.get('primary_level', 'category')
-            secondary_level = storage_config.get('secondary_level', 'vendor')
-            tertiary_level = storage_config.get('tertiary_level', 'none')
+            # Get folder structure configuration (from user's frontend settings)
+            primary_level = storage_config.get('primary_level')
+            secondary_level = storage_config.get('secondary_level')
+            tertiary_level = storage_config.get('tertiary_level')
+
+            logger.info(f"Building folder path with user config: primary={primary_level}, secondary={secondary_level}, tertiary={tertiary_level}")
 
             # Build list of folder levels
             levels = []
@@ -446,6 +473,9 @@ class GoogleDriveConnector:
                         # Sanitize folder name
                         folder_name = self._sanitize_filename_part(folder_name)
                         levels.append(folder_name)
+                        logger.debug(f"Extracted folder from '{level}': {folder_name}")
+                    else:
+                        logger.warning(f"Could not extract folder value for level '{level}' - no data available")
 
             # If no levels extracted, fallback to category only
             if not levels:
@@ -459,12 +489,25 @@ class GoogleDriveConnector:
                 # Check cache
                 cache_key = f"{current_folder_id}_{folder_name}"
                 if cache_key in self.folder_cache:
-                    current_folder_id = self.folder_cache[cache_key]
-                    folder_path_parts.append(folder_name)
-                    continue
+                    cached_folder_id = self.folder_cache[cache_key]
+                    # Validate cached folder still exists
+                    try:
+                        self.service.files().get(fileId=cached_folder_id, fields='id').execute()
+                        current_folder_id = cached_folder_id
+                        folder_path_parts.append(folder_name)
+                        logger.debug(f"Using cached folder ID for '{folder_name}'")
+                        continue
+                    except HttpError as e:
+                        if e.resp.status == 404:
+                            # Cached folder no longer exists, remove from cache
+                            logger.warning(f"Cached folder '{folder_name}' no longer exists, clearing cache")
+                            del self.folder_cache[cache_key]
+                        else:
+                            raise
 
-                # Search for existing folder
-                query = f"name='{folder_name}' and '{current_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+                # Search for existing folder (escape single quotes in folder name)
+                escaped_name = escape_drive_query_value(folder_name)
+                query = f"name='{escaped_name}' and '{current_folder_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
                 results = self.service.files().list(
                     q=query,
                     spaces='drive',

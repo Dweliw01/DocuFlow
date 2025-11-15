@@ -31,7 +31,7 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
-    loadExistingConfig();
+    // Note: loadExistingConfig() is now called from settings.html after authentication
 });
 
 function setupEventListeners() {
@@ -124,7 +124,7 @@ async function testConnection() {
     btn.textContent = 'Testing...';
 
     try {
-        const response = await fetch('/api/connectors/docuware/test', {
+        const response = await authenticatedFetch('/api/connectors/docuware/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -215,7 +215,7 @@ async function loadSavedDocuWareConfig(dwConfig) {
 
 async function loadFileCabinets() {
     try {
-        const response = await fetch('/api/connectors/docuware/cabinets', {
+        const response = await authenticatedFetch('/api/connectors/docuware/cabinets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -278,7 +278,7 @@ function handleCabinetChange(event) {
 
 async function loadStorageDialogs(cabinetId) {
     try {
-        const response = await fetch('/api/connectors/docuware/dialogs', {
+        const response = await authenticatedFetch('/api/connectors/docuware/dialogs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -342,7 +342,7 @@ async function loadIndexFields() {
     btn.innerHTML = '<span class="btn-icon">⏳</span> Loading...';
 
     try {
-        const response = await fetch('/api/connectors/docuware/fields', {
+        const response = await authenticatedFetch('/api/connectors/docuware/fields', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -386,7 +386,7 @@ async function loadIndexFields() {
 
 async function getFieldSuggestions(fields) {
     try {
-        const response = await fetch('/api/connectors/field-suggestions', {
+        const response = await authenticatedFetch('/api/connectors/field-suggestions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(fields)
@@ -856,7 +856,7 @@ async function saveConfiguration() {
             const tertiaryLevel = document.getElementById('folder-tertiary').value;
 
             // Get current config and update folder name + structure
-            const currentConfigResponse = await fetch('/api/connectors/config');
+            const currentConfigResponse = await authenticatedFetch('/api/connectors/config');
             const currentConfig = await currentConfigResponse.json();
 
             if (!currentConfig.google_drive) {
@@ -873,7 +873,7 @@ async function saveConfiguration() {
         }
 
         // Save configuration
-        const response = await fetch('/api/connectors/config', {
+        const response = await authenticatedFetch('/api/connectors/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -929,7 +929,7 @@ async function saveConfiguration() {
 
 async function loadExistingConfig() {
     try {
-        const response = await fetch('/api/connectors/config');
+        const response = await authenticatedFetch('/api/connectors/config');
         const config = await response.json();
 
         if (config.connector_type !== 'none' && config.connector_type) {
@@ -1124,7 +1124,7 @@ async function clearConfiguration() {
     }
 
     try {
-        const response = await fetch('/api/connectors/config', {
+        const response = await authenticatedFetch('/api/connectors/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1192,7 +1192,7 @@ async function checkGoogleDriveStatus() {
      * Shows appropriate UI state (connected vs not connected).
      */
     try {
-        const response = await fetch('/api/connectors/google-drive/status');
+        const response = await authenticatedFetch('/api/connectors/google-drive/status');
         const result = await response.json();
 
         if (result.connected) {
@@ -1240,7 +1240,7 @@ async function signInWithGoogle() {
 
     try {
         // Get OAuth URL from backend
-        const response = await fetch('/api/connectors/google-drive/oauth-start');
+        const response = await authenticatedFetch('/api/connectors/google-drive/oauth-start');
         const result = await response.json();
 
         if (!result.authorization_url) {
@@ -1312,7 +1312,7 @@ async function disconnectGoogleDrive() {
     }
 
     try {
-        const response = await fetch('/api/connectors/config', {
+        const response = await authenticatedFetch('/api/connectors/config', {
             method: 'DELETE'
         });
 

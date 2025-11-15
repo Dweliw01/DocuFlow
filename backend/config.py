@@ -40,6 +40,19 @@ class Settings(BaseSettings):
     google_oauth_client_secret: str | None = None
     google_oauth_redirect_uri: str = "http://localhost:8000/api/connectors/google-drive/oauth-callback"
 
+    # Auth0 Settings
+    auth0_domain: str | None = None
+    auth0_client_id: str | None = None
+    auth0_client_secret: str | None = None
+    auth0_audience: str = "https://docuflow-api"
+
+    # Database
+    database_url: str = "sqlite:///./docuflow.db"
+
+    # Security
+    secret_key: str = "change-this-to-random-32-char-string-in-production"
+    encryption_key: str | None = None
+
     class Config:
         """Pydantic configuration"""
         env_file = ".env"

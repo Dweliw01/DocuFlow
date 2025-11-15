@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Debug Panel</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+        .section { margin: 20px 0; padding: 15px; background: #2d2d2d; border-radius: 5px; }
+        h2 { color: #4ec9b0; }
+        pre { background: #1e1e1e; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .good { color: #4ec9b0; }
+        .bad { color: #f48771; }
+        button { padding: 10px 20px; margin: 5px; background: #0e639c; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #1177bb; }
+    </style>
+</head>
+<body>
+    <h1>🔍 DocuFlow Auth Debug Panel</h1>
+
+    <div class="section">
+        <h2>📦 LocalStorage Contents</h2>
+        <button onclick="checkStorage()">Refresh Storage</button>
+        <button onclick="clearStorage()">Clear All Storage</button>
+        <pre id="storage"></pre>
+    </div>
+
+    <div class="section">
+        <h2>🔑 Token Info</h2>
+        <pre id="tokenInfo"></pre>
+    </div>
+
+    <div class="section">
+        <h2>👤 User Info</h2>
+        <pre id="userInfo"></pre>
+    </div>
+
+    <div class="section">
+        <h2>🏢 Organization Check</h2>
+        <button onclick="checkOrganization()">Check Onboarding Status</button>
+        <pre id="orgInfo"></pre>
+    </div>
+
+    <div class="section">
+        <h2>🧪 Test API Call</h2>
+        <button onclick="testAuthenticatedCall()">Test Authenticated Request</button>
+        <pre id="apiTest"></pre>
+    </div>
+
+    <div class="section">
+        <h2>🔄 Navigation Test</h2>
+        <button onclick="window.location.href='/dashboard.html'">Go to Dashboard</button>
+        <button onclick="window.location.href='/settings.html'">Go to Settings</button>
+        <button onclick="window.location.href='/login.html'">Go to Login</button>
+    </div>
+
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <script src="auth.js"></script>
+
+    <script>
+        function checkStorage() {
+            const storage = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                storage[key] = localStorage.getItem(key);
+            }
+
+            let output = JSON.stringify(storage, null, 2);
+
+            // Check for auth token
+            if (localStorage.getItem('auth_token')) {
+                output += '\n\n✅ AUTH TOKEN EXISTS';
+            } else {
+                output += '\n\n❌ NO AUTH TOKEN FOUND';
+            }
+
+            // Check for user
+            if (localStorage.getItem('user')) {
+                output += '\n✅ USER DATA EXISTS';
+            } else {
+                output += '\n❌ NO USER DATA FOUND';
+            }
+
+            document.getElementById('storage').textContent = output;
+            checkToken();
+            checkUser();
+        }
+
+        function checkToken() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                document.getElementById('tokenInfo').textContent = '❌ No token found in localStorage';
+                return;
+            }
+
+            try {
+                // Decode JWT (without verification)
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    document.getElementById('tokenInfo').textContent = '❌ Invalid token format';
+                    return;
+                }
+
+                const payload = JSON.parse(atob(parts[1]));
+                const exp = payload.exp ? new Date(payload.exp * 1000) : null;
+                const now = new Date();
+
+                let output = '✅ Token found and decoded:\n\n';
+                output += JSON.stringify(payload, null, 2);
+                output += '\n\n';
+
+                if (exp) {
+                    if (exp > now) {
+                        output += `✅ Token expires: ${exp.toLocaleString()} (valid)`;
+                    } else {
+                        output += `❌ Token expired: ${exp.toLocaleString()} (EXPIRED!)`;
+                    }
+                } else {
+                    output += '⚠️ No expiration found in token';
+                }
+
+                document.getElementById('tokenInfo').textContent = output;
+            } catch (e) {
+                document.getElementById('tokenInfo').textContent = `❌ Error decoding token: ${e.message}`;
+            }
+        }
+
+        function checkUser() {
+            const userStr = localStorage.getItem('user');
+            if (!userStr) {
+                document.getElementById('userInfo').textContent = '❌ No user found in localStorage';
+                return;
+            }
+
+            try {
+                const user = JSON.parse(userStr);
+                document.getElementById('userInfo').textContent = '✅ User data:\n\n' + JSON.stringify(user, null, 2);
+            } catch (e) {
+                document.getElementById('userInfo').textContent = `❌ Error parsing user: ${e.message}`;
+            }
+        }
+
+        async function checkOrganization() {
+            const output = document.getElementById('orgInfo');
+            output.textContent = '⏳ Checking...';
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    output.textContent = '❌ No auth token - cannot check organization';
+                    return;
+                }
+
+                const response = await fetch('/api/organizations/check-onboarding', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    output.textContent = `❌ API Error: ${response.status} ${response.statusText}\n\n${await response.text()}`;
+                    return;
+                }
+
+                const data = await response.json();
+                let result = '✅ Organization check successful:\n\n';
+                result += JSON.stringify(data, null, 2);
+
+                if (data.needs_onboarding) {
+                    result += '\n\n⚠️ User needs onboarding';
+                } else {
+                    result += '\n\n✅ User has organization';
+                }
+
+                output.textContent = result;
+            } catch (e) {
+                output.textContent = `❌ Error: ${e.message}\n\n${e.stack}`;
+            }
+        }
+
+        async function testAuthenticatedCall() {
+            const output = document.getElementById('apiTest');
+            output.textContent = '⏳ Testing authenticated request...';
+
+            try {
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                    output.textContent = '❌ No auth token found';
+                    return;
+                }
+
+                console.log('[Debug] Sending request with token:', token.substring(0, 20) + '...');
+
+                const response = await fetch('/api/organizations/check-onboarding', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                console.log('[Debug] Response status:', response.status);
+                console.log('[Debug] Response headers:', [...response.headers.entries()]);
+
+                const responseText = await response.text();
+                console.log('[Debug] Response body:', responseText);
+
+                let result = `Status: ${response.status} ${response.statusText}\n\n`;
+                result += `Headers:\n${JSON.stringify([...response.headers.entries()], null, 2)}\n\n`;
+                result += `Body:\n${responseText}\n\n`;
+
+                if (response.ok) {
+                    result += '✅ Request successful!';
+                } else {
+                    result += '❌ Request failed!';
+                }
+
+                output.textContent = result;
+            } catch (e) {
+                output.textContent = `❌ Error: ${e.message}\n\n${e.stack}`;
+            }
+        }
+
+        function clearStorage() {
+            if (confirm('Clear all localStorage? This will log you out.')) {
+                localStorage.clear();
+                alert('Storage cleared!');
+                checkStorage();
+            }
+        }
+
+        // Auto-run on load
+        window.onload = checkStorage;
+    </script>
+</body>
+</html>

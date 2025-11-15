@@ -2,7 +2,7 @@
 API routes for document upload and processing.
 Handles file uploads, background processing, status checking, and downloads.
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import FileResponse
 from typing import List
 import os
@@ -33,15 +33,17 @@ from services.encryption_service import get_encryption_service
 from connectors.connector_manager import get_connector_manager
 from routes.connector_routes import get_current_config_with_decrypted_password
 from config import settings
+from auth import get_current_user
+from database import create_batch, update_batch, get_batch, get_subscription, get_usage_stats, log_usage, get_user_batches
+
+# Import plan configuration
+sys.path.append(str(Path(__file__).parent.parent))
+from plan_config import check_usage_limit, is_trial_expired
 
 logger = logging.getLogger(__name__)
 
 # Create API router
 router = APIRouter()
-
-# In-memory storage for batch results (use Redis/DB in production)
-# Format: {batch_id: {status, total_files, results, ...}}
-batch_results = {}
 
 # Initialize services (singleton pattern - create once, use throughout)
 ocr_service = OCRService()
@@ -54,15 +56,18 @@ connector_manager = get_connector_manager()
 @router.post("/upload", response_model=BatchUploadResponse)
 async def upload_documents(
     background_tasks: BackgroundTasks,
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Upload multiple PDF documents for processing.
     Processing happens in background, returns batch_id for status checking.
+    Requires authentication.
 
     Args:
         background_tasks: FastAPI background tasks handler
         files: List of uploaded PDF files
+        current_user: Authenticated user from JWT token
 
     Returns:
         BatchUploadResponse with batch_id and initial status
@@ -77,9 +82,56 @@ async def upload_documents(
     if len(files) > 100:
         raise HTTPException(status_code=400, detail="Maximum 100 files per batch")
 
+    # Check organization and subscription limits
+    org_id = current_user.get("organization_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=403,
+            detail="User must belong to an organization to upload documents"
+        )
+
+    # Get subscription
+    subscription = await get_subscription(org_id)
+    if not subscription:
+        raise HTTPException(
+            status_code=403,
+            detail="No active subscription found"
+        )
+
+    # Check if trial has expired
+    trial_end_date = subscription.get("trial_end_date")
+    if trial_end_date:
+        try:
+            if is_trial_expired(trial_end_date):
+                raise HTTPException(
+                    status_code=402,
+                    detail="Your trial has expired. Please upgrade your plan to continue processing documents."
+                )
+        except Exception as e:
+            logger.warning(f"Could not check trial expiration: {str(e)}")
+
+    # Get current usage for billing period
+    billing_period = datetime.now().strftime("%Y-%m")
+    usage_stats = await get_usage_stats(org_id, billing_period)
+    current_usage = usage_stats.get("total_documents_processed", 0)
+
+    # Check usage limits
+    plan_type = subscription.get("plan_type", "trial")
+    limit_check = check_usage_limit(plan_type, current_usage, len(files))
+
+    if not limit_check.get("allowed"):
+        raise HTTPException(
+            status_code=402,
+            detail=limit_check.get("reason") +
+                   f" (Current: {current_usage}, Trying to add: {len(files)}, Limit: {limit_check.get('limit')})"
+        )
+
     # Create unique batch ID
     batch_id = str(uuid.uuid4())
-    upload_folder = os.path.join(settings.upload_dir, batch_id)
+    user_id = current_user["id"]
+
+    # Create user-scoped upload folder
+    upload_folder = os.path.join(settings.upload_dir, str(user_id), batch_id)
     os.makedirs(upload_folder, exist_ok=True)
 
     # Save uploaded files
@@ -106,18 +158,11 @@ async def upload_documents(
 
         file_paths.append(file_path)
 
-    # Initialize batch result tracking
-    batch_results[batch_id] = {
-        "status": ProcessingStatus.PENDING,
-        "total_files": len(file_paths),
-        "processed_files": 0,
-        "results": [],
-        "started_at": datetime.now(),
-        "zip_path": None
-    }
+    # Create batch record in database
+    await create_batch(batch_id, user_id, len(file_paths))
 
     # Start background processing
-    background_tasks.add_task(process_batch, batch_id, file_paths)
+    background_tasks.add_task(process_batch, batch_id, user_id, file_paths)
 
     return BatchUploadResponse(
         batch_id=batch_id,
@@ -127,21 +172,21 @@ async def upload_documents(
     )
 
 
-async def process_batch(batch_id: str, file_paths: List[str]):
+async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
     """
     Process all documents in the batch (runs in background).
     Orchestrates OCR, AI categorization, and file organization.
 
     Args:
         batch_id: Unique identifier for this batch
+        user_id: User ID who owns this batch
         file_paths: List of paths to uploaded PDF files
     """
     print(f"\n{'='*60}")
-    print(f"📦 Starting batch processing: {batch_id}")
+    print(f"📦 Starting batch processing: {batch_id} (User: {user_id})")
     print(f"   Files to process: {len(file_paths)}")
     print(f"{'='*60}\n")
-    logger.info(f"Starting batch processing: {batch_id} ({len(file_paths)} files)")
-    batch_results[batch_id]["status"] = ProcessingStatus.PROCESSING
+    logger.info(f"Starting batch processing: {batch_id} ({len(file_paths)} files) for user {user_id}")
 
     # Process files with concurrency limit (avoid overwhelming system)
     semaphore = asyncio.Semaphore(settings.max_concurrent_processing)
@@ -151,7 +196,7 @@ async def process_batch(batch_id: str, file_paths: List[str]):
         """Wrapper to limit concurrent processing and update results incrementally"""
         async with semaphore:
             try:
-                result = await process_single_document(file_path)
+                result = await process_single_document(file_path, user_id)
             except Exception as e:
                 # Create error result for failed document
                 result = DocumentResult(
@@ -167,8 +212,16 @@ async def process_batch(batch_id: str, file_paths: List[str]):
 
             # Update results incrementally so frontend can show progress
             processed_results.append(result)
-            batch_results[batch_id]["results"] = processed_results.copy()
-            batch_results[batch_id]["processed_files"] = len(processed_results)
+
+            # Update database with current progress
+            await update_batch(
+                batch_id=batch_id,
+                status="processing",
+                processed_files=len(processed_results),
+                successful=0,
+                failed=0,
+                results=[r.dict() for r in processed_results]
+            )
 
             return result
 
@@ -179,14 +232,13 @@ async def process_batch(batch_id: str, file_paths: List[str]):
     # Organize files and create ZIP
     try:
         zip_path = await file_service.organize_documents(processed_results)
-        download_url = f"/download/{batch_id}"
-        batch_results[batch_id]["zip_path"] = zip_path
+        download_url = f"/api/download/{batch_id}"
     except Exception as e:
         logger.error(f"Failed to organize documents: {e}")
         download_url = None
 
     # Upload documents to configured connector (if any)
-    await upload_to_connector(processed_results)
+    await upload_to_connector(processed_results, user_id)
 
     # Calculate statistics
     successful = sum(1 for r in processed_results if r.error is None)
@@ -199,16 +251,40 @@ async def process_batch(batch_id: str, file_paths: List[str]):
             cat_name = result.category
             category_summary[cat_name] = category_summary.get(cat_name, 0) + 1
 
-    # Update batch results with final data
-    batch_results[batch_id].update({
-        "status": ProcessingStatus.COMPLETED,
-        "processed_files": len(processed_results),
-        "results": processed_results,
-        "successful": successful,
-        "failed": failed,
-        "processing_summary": category_summary,
-        "download_url": download_url
-    })
+    # Update database with final results
+    await update_batch(
+        batch_id=batch_id,
+        status="completed",
+        processed_files=len(processed_results),
+        successful=successful,
+        failed=failed,
+        results=[r.dict() for r in processed_results],
+        processing_summary=category_summary,
+        download_url=download_url
+    )
+
+    # Log usage for successful documents (for billing)
+    if successful > 0:
+        try:
+            # Get user's organization from database
+            from database import get_user_by_id
+            user = await get_user_by_id(user_id)
+            if user and user.get("organization_id"):
+                await log_usage(
+                    org_id=user["organization_id"],
+                    action_type="document_processed",
+                    document_count=successful,
+                    user_id=user_id,
+                    metadata={
+                        "batch_id": batch_id,
+                        "total_files": len(processed_results),
+                        "failed": failed,
+                        "categories": category_summary
+                    }
+                )
+                logger.info(f"Logged usage: {successful} documents for org {user['organization_id']}")
+        except Exception as e:
+            logger.error(f"Failed to log usage: {str(e)}")
 
     print(f"\n{'='*60}")
     print(f"✅ Batch processing completed: {batch_id}")
@@ -218,7 +294,7 @@ async def process_batch(batch_id: str, file_paths: List[str]):
     logger.info(f"Batch processing completed: {batch_id} ({successful} successful, {failed} failed)")
 
 
-async def process_single_document(file_path: str) -> DocumentResult:
+async def process_single_document(file_path: str, user_id: int) -> DocumentResult:
     """
     Process a single document through the full pipeline:
     1. OCR text extraction
@@ -227,6 +303,7 @@ async def process_single_document(file_path: str) -> DocumentResult:
 
     Args:
         file_path: Path to the PDF file
+        user_id: User ID for loading their connector configuration
 
     Returns:
         DocumentResult with categorization and metadata
@@ -248,7 +325,7 @@ async def process_single_document(file_path: str) -> DocumentResult:
         # Get selected fields from connector config (if configured)
         selected_fields = None
         selected_table_columns = None
-        config_tuple = get_current_config_with_decrypted_password()
+        config_tuple = await get_current_config_with_decrypted_password(user_id)
         if config_tuple:
             connector_config, _ = config_tuple
             if connector_config.connector_type == "docuware" and connector_config.docuware:
@@ -299,20 +376,21 @@ async def process_single_document(file_path: str) -> DocumentResult:
         )
 
 
-async def upload_to_connector(results: List[DocumentResult]):
+async def upload_to_connector(results: List[DocumentResult], user_id: int):
     """
     Upload processed documents to configured connector.
     Only uploads successfully processed documents with extracted data.
 
     Args:
         results: List of DocumentResult objects to upload
+        user_id: User ID for loading their connector configuration
     """
-    # Get current connector configuration
-    config_tuple = get_current_config_with_decrypted_password()
+    # Get current connector configuration for this user
+    config_tuple = await get_current_config_with_decrypted_password(user_id)
 
     if not config_tuple:
-        # No connector configured
-        logger.info("No connector configured - skipping uploads")
+        # No connector configured for this user
+        logger.info(f"No connector configured for user {user_id} - skipping uploads")
         return
 
     config, decrypted_password = config_tuple
@@ -377,24 +455,36 @@ async def upload_to_connector(results: List[DocumentResult]):
 
 
 @router.get("/status/{batch_id}", response_model=BatchResultResponse)
-async def get_batch_status(batch_id: str):
+async def get_batch_status(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Get the processing status of a batch.
     Frontend polls this endpoint to show progress.
+    Requires authentication and enforces user isolation.
 
     Args:
         batch_id: Unique batch identifier
+        current_user: Authenticated user from JWT token
 
     Returns:
         BatchResultResponse with current status and results
 
     Raises:
-        HTTPException: If batch_id not found
+        HTTPException: If batch_id not found or access denied
     """
-    if batch_id not in batch_results:
-        raise HTTPException(status_code=404, detail="Batch not found")
+    # Get batch from database (with user isolation)
+    batch = await get_batch(batch_id, current_user["id"])
 
-    batch = batch_results[batch_id]
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found or access denied")
+
+    # Convert results from JSON strings back to DocumentResult objects
+    results = []
+    if batch.get("results"):
+        for result_dict in batch["results"]:
+            results.append(DocumentResult(**result_dict))
 
     return BatchResultResponse(
         batch_id=batch_id,
@@ -403,36 +493,54 @@ async def get_batch_status(batch_id: str):
         processed_files=batch["processed_files"],
         successful=batch.get("successful", 0),
         failed=batch.get("failed", 0),
-        results=batch.get("results", []),
+        results=results,
         processing_summary=batch.get("processing_summary", {}),
         download_url=batch.get("download_url")
     )
 
 
 @router.get("/download/{batch_id}")
-async def download_results(batch_id: str):
+async def download_results(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user)
+):
     """
     Download the organized documents as a ZIP file.
+    Requires authentication and enforces user isolation.
 
     Args:
         batch_id: Unique batch identifier
+        current_user: Authenticated user from JWT token
 
     Returns:
         FileResponse with ZIP file
 
     Raises:
-        HTTPException: If batch not found or not ready
+        HTTPException: If batch not found, not ready, or access denied
     """
-    if batch_id not in batch_results:
-        raise HTTPException(status_code=404, detail="Batch not found")
+    # Get batch from database (with user isolation)
+    batch = await get_batch(batch_id, current_user["id"])
 
-    batch = batch_results[batch_id]
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found or access denied")
 
-    if batch["status"] != ProcessingStatus.COMPLETED:
+    if batch["status"] != "completed":
         raise HTTPException(status_code=400, detail="Batch processing not complete")
 
-    zip_path = batch.get("zip_path")
-    if not zip_path or not os.path.exists(zip_path):
+    # Find ZIP file in processed directory
+    user_processed_dir = os.path.join(settings.processed_dir, str(current_user["id"]))
+    zip_candidates = [
+        os.path.join(user_processed_dir, f"batch_{batch_id}.zip"),
+        os.path.join(settings.processed_dir, f"batch_{batch_id}.zip"),
+    ]
+
+    zip_path = None
+    for candidate in zip_candidates:
+        if os.path.exists(candidate):
+            zip_path = candidate
+            break
+
+    if not zip_path:
         raise HTTPException(status_code=404, detail="Results file not found")
 
     return FileResponse(
@@ -440,3 +548,30 @@ async def download_results(batch_id: str):
         filename=f"processed_documents_{batch_id}.zip",
         media_type="application/zip"
     )
+
+
+@router.get("/batches")
+async def get_batches(
+    limit: int = 10,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get recent batches for the current user.
+    Used by the dashboard to show processing history.
+
+    Args:
+        limit: Maximum number of batches to return (default: 10)
+        current_user: Authenticated user from JWT token
+
+    Returns:
+        List of recent batches with status and summary info
+    """
+    try:
+        batches = await get_user_batches(current_user["id"], limit=limit)
+        return batches
+    except Exception as e:
+        logger.error(f"Error fetching user batches: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch batches: {str(e)}"
+        )

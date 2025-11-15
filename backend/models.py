@@ -8,6 +8,197 @@ from enum import Enum
 from datetime import datetime
 
 
+# ============================================================================
+# User Models - Authentication and Authorization
+# ============================================================================
+
+
+class User(BaseModel):
+    """
+    User account model.
+    Represents an authenticated user in the system.
+    """
+    id: int
+    auth0_user_id: str
+    email: str
+    name: Optional[str] = None
+    organization_id: Optional[int] = None  # Link to organization
+    role: Optional[str] = "member"  # owner/admin/member
+    created_at: datetime
+    last_login: Optional[datetime] = None
+
+
+class Auth0Config(BaseModel):
+    """
+    Auth0 configuration for frontend.
+    Returned to client for authentication setup.
+    """
+    domain: str
+    client_id: str
+    audience: str
+
+
+class LoginResponse(BaseModel):
+    """
+    Response after successful login.
+    Contains user info and access token.
+    """
+    user: User
+    message: str = "Login successful"
+
+
+# ============================================================================
+# Multi-Tenant Organization Models
+# ============================================================================
+
+
+class Organization(BaseModel):
+    """
+    Organization/tenant model.
+    Represents a customer business using DocuFlow.
+    """
+    id: int
+    name: str
+    created_at: datetime
+    subscription_plan: str = "trial"  # trial/starter/pro/enterprise/custom
+    billing_email: Optional[str] = None
+    status: str = "active"  # active/suspended/trial/cancelled
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class OrganizationCreate(BaseModel):
+    """
+    Request model for creating a new organization.
+    Used during user onboarding.
+    """
+    name: str
+    billing_email: str
+    subscription_plan: str = "trial"
+
+
+class OrganizationUpdate(BaseModel):
+    """
+    Request model for updating organization details.
+    """
+    name: Optional[str] = None
+    billing_email: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class OrganizationSettings(BaseModel):
+    """
+    Organization-level settings model.
+    Replaces user-level connector configurations.
+    """
+    id: int
+    organization_id: int
+    connector_type: str  # docuware/google_drive
+    config_encrypted: str  # Encrypted JSON
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    created_by_user_id: Optional[int] = None
+
+
+class Subscription(BaseModel):
+    """
+    Subscription/billing configuration for an organization.
+    Supports multiple billing models.
+    """
+    id: int
+    organization_id: int
+    plan_type: str = "per_document"  # per_document/tiered/custom
+
+    # Per-document billing
+    price_per_document: Optional[float] = 0.10
+
+    # Tiered billing
+    monthly_base_fee: Optional[float] = None
+    monthly_document_limit: Optional[int] = None
+    overage_price_per_document: Optional[float] = None
+
+    # Payment integration
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+
+    # Billing cycle
+    billing_cycle_start: Optional[datetime] = None
+    current_period_start: Optional[datetime] = None
+    current_period_end: Optional[datetime] = None
+
+    # Status
+    status: str = "active"  # active/past_due/cancelled
+
+    created_at: datetime
+    updated_at: datetime
+
+
+class SubscriptionUpdate(BaseModel):
+    """
+    Request model for updating subscription.
+    """
+    plan_type: Optional[str] = None
+    price_per_document: Optional[float] = None
+    monthly_base_fee: Optional[float] = None
+    monthly_document_limit: Optional[int] = None
+    overage_price_per_document: Optional[float] = None
+
+
+class UsageLog(BaseModel):
+    """
+    Usage tracking log for billing.
+    Records all billable actions.
+    """
+    id: int
+    organization_id: int
+    user_id: Optional[int] = None
+    action_type: str  # document_upload/document_processed/ocr_extraction
+    document_count: int = 1
+    timestamp: datetime
+    metadata: Optional[Dict[str, Any]] = None
+    billed: bool = False
+    billing_period: Optional[str] = None  # e.g., "2025-01"
+
+
+class UsageStats(BaseModel):
+    """
+    Aggregated usage statistics for an organization.
+    Used for displaying current usage in UI.
+    """
+    organization_id: int
+    billing_period: str
+    total_documents_processed: int
+    total_documents_uploaded: int
+    total_ocr_extractions: int
+    total_cost: float
+    documents_by_category: Dict[str, int] = Field(default_factory=dict)
+    usage_by_user: Dict[str, int] = Field(default_factory=dict)
+
+
+class OrganizationUserInvite(BaseModel):
+    """
+    Request model for inviting a user to an organization.
+    """
+    email: str
+    role: str = "member"  # owner/admin/member
+    name: Optional[str] = None
+
+
+class OrganizationWithUsers(BaseModel):
+    """
+    Organization model with user list.
+    Used for admin pages.
+    """
+    organization: Organization
+    users: List[User]
+    subscription: Optional[Subscription] = None
+
+
+# ============================================================================
+# Document Processing Models
+# ============================================================================
+
+
 class DocumentCategory(str, Enum):
     """
     Supported document categories for classification.

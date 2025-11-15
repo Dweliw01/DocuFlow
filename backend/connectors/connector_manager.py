@@ -5,11 +5,15 @@ Handles connector selection and upload coordination.
 from typing import Dict, Any, Optional
 from pathlib import Path
 import sys
+import logging
+
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models import ConnectorType, ConnectorConfig, ExtractedData, UploadResult, DocumentCategory
 from connectors.docuware_connector import DocuWareConnector
 from connectors.google_drive_connector import GoogleDriveConnector
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectorManager:
@@ -217,10 +221,20 @@ class ConnectorManager:
                         error="Failed to authenticate with Google Drive"
                     )
 
-            # Prepare storage config
+            # Prepare storage config (use user's configured folder organization from frontend)
+            # Extract folder organization levels - handle both Enum and string values
+            primary = google_drive_config.primary_level
+            secondary = google_drive_config.secondary_level
+            tertiary = google_drive_config.tertiary_level
+
             storage_config = {
-                "root_folder_name": google_drive_config.root_folder_name or "DocuFlow"
+                "root_folder_name": google_drive_config.root_folder_name or "DocuFlow",
+                "primary_level": primary.value if hasattr(primary, 'value') else primary,
+                "secondary_level": secondary.value if hasattr(secondary, 'value') else secondary,
+                "tertiary_level": tertiary.value if hasattr(tertiary, 'value') else tertiary
             }
+
+            logger.info(f"Google Drive folder structure: {storage_config['primary_level']} → {storage_config['secondary_level']} → {storage_config['tertiary_level']}")
 
             # Upload document
             result = await self.google_drive_connector.upload_document(

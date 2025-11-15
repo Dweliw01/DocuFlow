@@ -50,6 +50,8 @@ Thumbs.db
 .coverage
 htmlcov/
 backend/test_storage/
+test_docuflow.db
+.pytest/
 
 # Logs
 *.log

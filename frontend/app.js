@@ -428,9 +428,10 @@ function showResults(data) {
     // Add a small delay to give backend time to update usage logs
     console.log('[Results] Refreshing dashboard stats in 2 seconds...');
     setTimeout(() => {
-        console.log('[Results] Now refreshing stats...');
+        console.log('[Results] Now refreshing stats and pending documents...');
         loadStatsOverview().catch(err => console.error('[Results] Failed to refresh stats:', err));
         loadRecentActivity().catch(err => console.error('[Results] Failed to refresh activity:', err));
+        loadPendingDocuments().catch(err => console.error('[Results] Failed to refresh pending documents:', err));
     }, 2000);
 }
 
@@ -535,6 +536,59 @@ function renderExtractedDataCard(doc, docId) {
 
     if (contact.length > 0) {
         sections.push({ title: 'Contact', items: contact });
+    }
+
+    // Dynamic additional fields - show any fields not already displayed
+    const knownFields = [
+        'amount', 'date', 'due_date',  // Financial
+        'vendor', 'client', 'person_name', 'company',  // Parties
+        'document_type', 'document_number', 'reference_number',  // Document
+        'phone', 'email', 'address',  // Contact
+        'line_items'  // Line items handled separately
+    ];
+
+    const internalFields = [
+        'id', 'user_id', 'organization_id', 'created_at', 'updated_at',
+        'document_id', 'upload_id', 'status', 'connector_id'
+    ];
+
+    const additionalFields = [];
+
+    // Helper function to format field names nicely
+    function formatFieldName(fieldName) {
+        return fieldName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    // Loop through all fields in the data object
+    for (let key in data) {
+        if (data.hasOwnProperty(key)) {
+            const value = data[key];
+
+            // Skip if it's a known field, internal field, or empty value
+            if (!knownFields.includes(key) &&
+                !internalFields.includes(key) &&
+                value !== null &&
+                value !== undefined &&
+                value !== '') {
+
+                // Only add simple values (not objects or arrays)
+                if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                    additionalFields.push({
+                        icon: '<i class="fa-solid fa-tag"></i>',
+                        label: formatFieldName(key),
+                        value: String(value)
+                    });
+                }
+            }
+        }
+    }
+
+    // Add additional fields section if there are any
+    if (additionalFields.length > 0) {
+        sections.push({ title: 'Additional Fields', items: additionalFields });
     }
 
     return `
@@ -664,10 +718,16 @@ async function loadDashboard() {
     console.log('[Dashboard] Loading dashboard...');
 
     try {
+        // Display user info first
+        if (typeof displayUserInfo === 'function') {
+            await displayUserInfo('userInfo');
+        }
+
         await Promise.all([
             loadOrganizationContext(),
             loadStatsOverview(),
-            loadRecentActivity()
+            loadRecentActivity(),
+            loadPendingDocuments()
         ]);
 
         // Set up refresh button
@@ -1182,6 +1242,118 @@ async function loadRecentActivity() {
                 <p>Failed to load recent activity. Please try again.</p>
             </div>
         `;
+    }
+}
+
+/**
+ * Load pending review documents
+ */
+async function loadPendingDocuments() {
+    console.log('[Dashboard] Loading pending documents...');
+    const section = document.getElementById('pendingReviewSection');
+    const container = document.getElementById('pendingDocuments');
+    const countBadge = document.getElementById('pendingCount');
+
+    if (!section || !container) {
+        console.warn('[Dashboard] Pending review section elements not found');
+        return;
+    }
+
+    try {
+        // Get pending documents
+        console.log('[Dashboard] Fetching from /api/documents/pending...');
+        const response = await authenticatedFetch('/api/documents/pending');
+        if (!response.ok) {
+            throw new Error('Failed to load pending documents');
+        }
+
+        const data = await response.json();
+        const documents = data.documents || [];
+
+        console.log(`[Dashboard] Received ${documents.length} pending documents:`, documents);
+
+        if (documents.length === 0) {
+            // Hide section if no pending documents
+            console.log('[Dashboard] No pending documents, hiding section');
+            section.style.display = 'none';
+            return;
+        }
+
+        // Show section and update count
+        section.style.display = 'block';
+        countBadge.textContent = documents.length;
+
+        // Render documents
+        const documentsHTML = documents.map(doc => {
+            const createdAt = new Date(doc.created_at);
+            const confidence = Math.round((doc.confidence_score || 0) * 100);
+
+            // Confidence badge styling
+            let confidenceClass = 'confidence-high';
+            let confidenceIcon = 'fa-check-circle';
+            if (confidence < 90) {
+                confidenceClass = confidence >= 70 ? 'confidence-medium' : 'confidence-low';
+                confidenceIcon = confidence >= 70 ? 'fa-exclamation-triangle' : 'fa-times-circle';
+            }
+
+            return `
+                <div style="
+                    border: 1px solid var(--gray-200);
+                    border-radius: var(--radius-lg);
+                    padding: 1.25rem;
+                    margin-bottom: 1rem;
+                    transition: all 0.2s;
+                    cursor: pointer;
+                    background: white;
+                " onmouseover="this.style.borderColor='#3b82f6'; this.style.background='#eff6ff';"
+                   onmouseout="this.style.borderColor='var(--gray-200)'; this.style.background='white';"
+                   onclick="window.location.href='/pdf-viewer.html?id=${doc.id}'">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--gray-900); font-size: 1rem; margin-bottom: 0.25rem;">
+                                <i class="fa-solid fa-file-pdf" style="color: #ef4444; margin-right: 0.5rem;"></i>
+                                ${doc.filename}
+                            </div>
+                            <div style="font-size: 0.875rem; color: var(--gray-600);">
+                                ${doc.category || 'Uncategorized'} • ${createdAt.toLocaleDateString()} ${createdAt.toLocaleTimeString()}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div class="${confidenceClass}" style="
+                                padding: 0.375rem 0.75rem;
+                                border-radius: 6px;
+                                font-size: 0.85rem;
+                                font-weight: 600;
+                                white-space: nowrap;
+                            ">
+                                <i class="fa-solid ${confidenceIcon}"></i> ${confidence}%
+                            </div>
+                            <button style="
+                                background: #3b82f6;
+                                color: white;
+                                border: none;
+                                padding: 0.5rem 1rem;
+                                border-radius: 6px;
+                                font-weight: 600;
+                                font-size: 0.875rem;
+                                cursor: pointer;
+                                transition: background 0.2s;
+                            " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                                Review
+                                <i class="fa-solid fa-arrow-right" style="margin-left: 0.5rem;"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = documentsHTML;
+        console.log('[Dashboard] Successfully rendered pending documents section');
+
+    } catch (error) {
+        console.error('[Dashboard] Error loading pending documents:', error);
+        section.style.display = 'none';
     }
 }
 

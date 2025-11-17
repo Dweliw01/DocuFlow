@@ -11,6 +11,7 @@ from datetime import datetime
 import asyncio
 import time
 import logging
+import json
 from pathlib import Path
 
 import sys
@@ -30,11 +31,14 @@ from services.ocr_service import OCRService
 from services.ai_service import AIService
 from services.file_service import FileService
 from services.encryption_service import get_encryption_service
+from services.confidence_service import calculate_overall_confidence, add_confidence_to_extracted_data
+from services.auto_upload_service import process_document_for_review
+from services.ai_learning_service import get_ai_learning_service
 from connectors.connector_manager import get_connector_manager
 from routes.connector_routes import get_current_config_with_decrypted_password
 from config import settings
 from auth import get_current_user
-from database import create_batch, update_batch, get_batch, get_subscription, get_usage_stats, log_usage, get_user_batches
+from database import create_batch, update_batch, get_batch, get_subscription, get_usage_stats, log_usage, get_user_batches, get_db_connection, get_user_by_id
 
 # Import plan configuration
 sys.path.append(str(Path(__file__).parent.parent))
@@ -51,6 +55,7 @@ ai_service = AIService()
 file_service = FileService()
 encryption_service = get_encryption_service()
 connector_manager = get_connector_manager()
+ai_learning_service = get_ai_learning_service()
 
 
 @router.post("/upload", response_model=BatchUploadResponse)
@@ -188,6 +193,10 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
     print(f"{'='*60}\n")
     logger.info(f"Starting batch processing: {batch_id} ({len(file_paths)} files) for user {user_id}")
 
+    # Get user's organization for review workflow
+    user = await get_user_by_id(user_id)
+    organization_id = user.get("organization_id") if user else None
+
     # Process files with concurrency limit (avoid overwhelming system)
     semaphore = asyncio.Semaphore(settings.max_concurrent_processing)
     processed_results = []
@@ -209,6 +218,60 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                     error=str(e),
                     processing_time=0.0
                 )
+
+            # Save to document_metadata and run review workflow
+            if organization_id and result.error is None and result.extracted_data:
+                try:
+                    # Convert Pydantic model to dict for confidence service
+                    extracted_data_dict = result.extracted_data.dict() if hasattr(result.extracted_data, 'dict') else result.extracted_data.model_dump()
+
+                    # Calculate confidence score
+                    confidence_score = calculate_overall_confidence(extracted_data_dict)
+
+                    # Add confidence to extracted data fields
+                    scored_data = add_confidence_to_extracted_data(extracted_data_dict)
+
+                    # Save to document_metadata table
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute('''
+                            INSERT INTO document_metadata
+                            (organization_id, batch_id, filename, file_path, category,
+                             extracted_data, status, confidence_score, connector_type, processed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            organization_id,
+                            batch_id,
+                            result.filename,
+                            file_path,
+                            result.category.value if hasattr(result.category, 'value') else str(result.category),
+                            json.dumps(scored_data),  # Store as JSON string
+                            'pending_review',  # Initial status
+                            confidence_score,
+                            None,  # connector_type will be set on approval
+                            datetime.utcnow()
+                        ))
+                        conn.commit()
+                        doc_id = cursor.lastrowid
+
+                        # Run review workflow to determine if should auto-upload
+                        review_result = await process_document_for_review(
+                            doc_id,
+                            organization_id,
+                            confidence_score
+                        )
+
+                        logger.info(
+                            f"Document {doc_id} ({result.filename}): "
+                            f"{review_result['status']} (confidence: {confidence_score:.2f})"
+                        )
+
+                    finally:
+                        conn.close()
+
+                except Exception as e:
+                    logger.error(f"Failed to save document metadata for {result.filename}: {e}")
 
             # Update results incrementally so frontend can show progress
             processed_results.append(result)
@@ -237,8 +300,10 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
         logger.error(f"Failed to organize documents: {e}")
         download_url = None
 
-    # Upload documents to configured connector (if any)
-    await upload_to_connector(processed_results, user_id)
+    # NOTE: Connector upload is now handled by the review workflow
+    # Documents go through review (or auto-upload based on confidence)
+    # and are uploaded when approved via the document approval endpoint
+    # await upload_to_connector(processed_results, user_id)
 
     # Calculate statistics
     successful = sum(1 for r in processed_results if r.error is None)
@@ -267,7 +332,6 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
     if successful > 0:
         try:
             # Get user's organization from database
-            from database import get_user_by_id
             user = await get_user_by_id(user_id)
             if user and user.get("organization_id"):
                 await log_usage(
@@ -339,6 +403,35 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
             selected_fields=selected_fields,
             selected_table_columns=selected_table_columns
         )
+
+        # Step 3: AI Learning - Apply learned suggestions and adjust confidence
+        try:
+            # Get user's organization_id
+            user = get_user_by_id(user_id)
+            if user and user.get('organization_id'):
+                organization_id = user['organization_id']
+
+                # Apply learned suggestions based on correction history
+                enhanced_data, applied_suggestions = ai_learning_service.apply_learned_suggestions(
+                    extracted_data,
+                    organization_id,
+                    category=category.value if category else None
+                )
+
+                if applied_suggestions:
+                    logger.info(f"[AI LEARNING] Applied {len(applied_suggestions)} learned suggestions: {', '.join(applied_suggestions)}")
+                    extracted_data = enhanced_data
+
+                # Adjust confidence scores based on error-prone fields
+                extracted_data = ai_learning_service.adjust_confidence_with_learning(
+                    extracted_data,
+                    organization_id,
+                    category=category.value if category else None
+                )
+
+        except Exception as e:
+            logger.warning(f"[AI LEARNING] Error applying learning: {e}")
+            # Continue processing even if learning fails
 
         # Create preview (first 500 chars)
         text_preview = extracted_text[:500] if extracted_text else ""

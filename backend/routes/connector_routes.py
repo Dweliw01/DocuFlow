@@ -641,15 +641,16 @@ async def save_connector_configuration(
             config_data=config.dict()
         )
 
-        # Clear connector cache when configuration changes
-        if connector_type_str == "docuware":
-            docuware_connector.clear_cache()
-            logger.info(f"Cleared DocuWare cache for user {current_user['email']}")
-        elif connector_type_str == "google_drive":
-            # Clear Google Drive cache (root folder ID and folder cache)
-            google_drive_connector.root_folder_id = None
-            google_drive_connector.folder_cache = {}
-            logger.info(f"Cleared Google Drive cache for user {current_user['email']}")
+        # DON'T clear connector cache - reuse the authenticated session!
+        # The session that just successfully tested the connection should be kept for uploads
+        logger.info(f"Keeping authenticated session for {connector_type_str} connector")
+
+        # Only clear cache if explicitly requested or on logout
+        # if connector_type_str == "docuware":
+        #     docuware_connector.clear_cache()
+        # elif connector_type_str == "google_drive":
+        #     google_drive_connector.root_folder_id = None
+        #     google_drive_connector.folder_cache = {}
 
         logger.info(f"Saved {config.connector_type} config {config_id} for user {current_user['email']}")
 

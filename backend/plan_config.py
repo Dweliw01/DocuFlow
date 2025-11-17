@@ -22,52 +22,54 @@ PLAN_TIERS = {
         ],
         "is_trial": True
     },
-    "per_document": {
-        "name": "Pay Per Document",
-        "display_name": "Pay Per Document",
-        "duration_days": None,  # Ongoing
-        "monthly_document_limit": None,  # Unlimited
-        "price_per_document": 0.10,
-        "monthly_base_fee": 0.0,
-        "features": [
-            "Unlimited documents",
-            "AI-powered categorization",
-            "Advanced field extraction",
-            "Pay only for what you use",
-            "No monthly fees"
-        ],
-        "is_trial": False
-    },
     "starter": {
         "name": "Starter Plan",
-        "display_name": "Starter Plan",
+        "display_name": "Starter",
         "duration_days": None,  # Ongoing monthly
         "monthly_document_limit": 500,
-        "price_per_document": 0.08,  # Overage price
-        "monthly_base_fee": 29.99,
+        "price_per_document": 0.10,  # Overage price
+        "monthly_base_fee": 29.00,
         "features": [
             "500 documents per month",
             "AI-powered categorization",
             "Advanced field extraction",
+            "Email support",
+            "$0.10 per document over limit"
+        ],
+        "is_trial": False
+    },
+    "professional": {
+        "name": "Professional Plan",
+        "display_name": "Professional",
+        "duration_days": None,
+        "monthly_document_limit": 2500,
+        "price_per_document": 0.08,  # Overage price
+        "monthly_base_fee": 99.00,
+        "features": [
+            "2,500 documents per month",
+            "AI-powered categorization",
+            "Advanced field extraction",
+            "Custom field mappings",
             "Priority support",
             "$0.08 per document over limit"
         ],
         "is_trial": False
     },
-    "pro": {
-        "name": "Pro Plan",
-        "display_name": "Pro Plan",
+    "enterprise": {
+        "name": "Enterprise Plan",
+        "display_name": "Enterprise",
         "duration_days": None,
-        "monthly_document_limit": 2000,
-        "price_per_document": 0.06,  # Overage price
-        "monthly_base_fee": 99.99,
+        "monthly_document_limit": 10000,
+        "price_per_document": 0.05,  # Overage price
+        "monthly_base_fee": 299.00,
         "features": [
-            "2000 documents per month",
+            "10,000 documents per month",
             "AI-powered categorization",
             "Advanced field extraction",
-            "Custom field mappings",
-            "Priority support",
-            "$0.06 per document over limit"
+            "Custom AI training",
+            "Dedicated support",
+            "SSO & advanced security",
+            "$0.05 per document over limit"
         ],
         "is_trial": False
     }

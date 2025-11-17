@@ -40,6 +40,11 @@ function setupEventListeners() {
         radio.addEventListener('change', handleConnectorChange);
     });
 
+    // Review mode selection
+    document.querySelectorAll('input[name="review_mode"]').forEach(radio => {
+        radio.addEventListener('change', handleReviewModeChange);
+    });
+
     // DocuWare connection test
     document.getElementById('test-connection-btn').addEventListener('click', testConnection);
 
@@ -69,6 +74,9 @@ function setupEventListeners() {
 
     // Clear configuration
     document.getElementById('clear-config-btn').addEventListener('click', clearConfiguration);
+
+    // Load review settings
+    loadReviewSettings();
 }
 
 // ============================================================================
@@ -1396,5 +1404,236 @@ function showAlert(containerId, type, message) {
         setTimeout(() => {
             container.style.display = 'none';
         }, 5000);
+    }
+}
+
+// ============================================================================
+// Review Workflow Settings
+// ============================================================================
+
+/**
+ * Get authentication token from localStorage
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token');
+}
+
+/**
+ * Show message to user
+ */
+function showMessage(message, type) {
+    // Use the review-settings-status alert container
+    const containerId = 'review-settings-status';
+    showAlert(containerId, type, message);
+}
+
+/**
+ * Load review workflow settings from API
+ */
+async function loadReviewSettings() {
+    try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        const response = await fetch('/api/organizations/review-settings', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load review settings');
+        }
+
+        const settings = await response.json();
+
+        // Set review mode radio
+        const reviewModeRadio = document.querySelector(`input[name="review_mode"][value="${settings.review_mode}"]`);
+        if (reviewModeRadio) {
+            reviewModeRadio.checked = true;
+        }
+
+        // Set confidence threshold
+        const threshold = Math.round((settings.confidence_threshold || 0.90) * 100);
+        const slider = document.getElementById('confidence-threshold-slider');
+        if (slider) {
+            slider.value = threshold;
+            updateThresholdDisplay(threshold);
+        }
+
+        // Show/hide threshold section based on review mode
+        handleReviewModeChange({ target: reviewModeRadio });
+
+        // Display the summary (hide form, show display)
+        displayReviewSettingsSummary(settings);
+
+    } catch (error) {
+        console.error('Error loading review settings:', error);
+    }
+}
+
+/**
+ * Display review settings summary
+ */
+function displayReviewSettingsSummary(settings) {
+    const displayDiv = document.getElementById('review-settings-display');
+    const formDiv = document.getElementById('review-settings-form');
+
+    if (!displayDiv || !formDiv) return;
+
+    // Map review_mode to user-friendly text
+    const reviewModeLabels = {
+        'review_all': 'Review All Documents',
+        'smart': 'Smart Review',
+        'auto_upload': 'Auto-Upload All'
+    };
+
+    const reviewModeText = reviewModeLabels[settings.review_mode] || settings.review_mode;
+    document.getElementById('current-review-mode').textContent = reviewModeText;
+
+    // Show/hide threshold row based on mode
+    const thresholdRow = document.getElementById('current-threshold-row');
+    const thresholdSpan = document.getElementById('current-threshold');
+    if (settings.review_mode === 'smart') {
+        thresholdRow.style.display = 'flex';
+        const thresholdPercent = Math.round((settings.confidence_threshold || 0.90) * 100);
+        thresholdSpan.textContent = `${thresholdPercent}%`;
+    } else {
+        thresholdRow.style.display = 'none';
+    }
+
+    // Show summary, hide form
+    displayDiv.style.display = 'block';
+    formDiv.style.display = 'none';
+}
+
+/**
+ * Edit review settings (show form)
+ */
+function editReviewSettings() {
+    const displayDiv = document.getElementById('review-settings-display');
+    const formDiv = document.getElementById('review-settings-form');
+
+    if (!displayDiv || !formDiv) return;
+
+    // Hide summary, show form
+    displayDiv.style.display = 'none';
+    formDiv.style.display = 'block';
+
+    // Scroll to the review settings section
+    document.getElementById('review-settings-card').scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+}
+
+/**
+ * Handle review mode radio button change
+ */
+function handleReviewModeChange(event) {
+    const reviewMode = event.target.value;
+    const thresholdSection = document.getElementById('confidence-threshold-section');
+
+    // Show threshold section only for "smart" mode
+    if (thresholdSection) {
+        thresholdSection.style.display = reviewMode === 'smart' ? 'block' : 'none';
+    }
+}
+
+/**
+ * Update threshold display value
+ */
+function updateThresholdDisplay(value) {
+    const display = document.getElementById('threshold-value');
+    if (display) {
+        display.textContent = value;
+    }
+}
+
+/**
+ * Save review workflow settings
+ */
+async function saveReviewSettings() {
+    const saveBtn = document.getElementById('save-review-settings-btn');
+
+    try {
+        // Get selected review mode
+        const reviewMode = document.querySelector('input[name="review_mode"]:checked')?.value;
+        if (!reviewMode) {
+            showMessage('Please select a review mode', 'error');
+            return;
+        }
+
+        // Get confidence threshold (convert from percentage to decimal)
+        const thresholdValue = document.getElementById('confidence-threshold-slider')?.value;
+        const confidenceThreshold = parseFloat(thresholdValue) / 100;
+
+        // Disable button and show loading
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+        const token = getAuthToken();
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        // Send update request
+        console.log('Sending review settings update:', {
+            review_mode: reviewMode,
+            confidence_threshold: confidenceThreshold
+        });
+
+        const response = await fetch('/api/organizations/review-settings', {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                review_mode: reviewMode,
+                confidence_threshold: confidenceThreshold
+            })
+        });
+
+        console.log('Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            let errorMessage = 'Failed to save review settings';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || errorMessage;
+            } catch (e) {
+                errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+
+        // Show success message
+        showMessage('Review settings saved successfully!', 'success');
+
+        // Update button
+        saveBtn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+
+        // After a brief delay, hide the form and show the summary
+        setTimeout(() => {
+            saveBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save Review Settings';
+            saveBtn.disabled = false;
+
+            // Display the summary
+            displayReviewSettingsSummary({
+                review_mode: reviewMode,
+                confidence_threshold: confidenceThreshold
+            });
+        }, 1500);
+
+    } catch (error) {
+        console.error('Error saving review settings:', error);
+        showMessage('Failed to save review settings: ' + error.message, 'error');
+
+        // Reset button
+        saveBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save Review Settings';
+        saveBtn.disabled = false;
     }
 }

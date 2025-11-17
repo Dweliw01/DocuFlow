@@ -310,9 +310,24 @@ class DocuWareConnector(BaseConnector):
             # Create credentials key to track account changes
             credentials_key = f"{server_url}|{username}"
 
+            # Check if credentials changed
+            credentials_changed = self.current_credentials_key != credentials_key
+
+            # DEBUG: Log credential comparison
+            logger.debug(f"[AUTH DEBUG] Current key: '{self.current_credentials_key}'")
+            logger.debug(f"[AUTH DEBUG] New key: '{credentials_key}'")
+            logger.debug(f"[AUTH DEBUG] Credentials changed: {credentials_changed}")
+            logger.debug(f"[AUTH DEBUG] Has valid session: {self._has_valid_session()}")
+
+            # If we have a valid session and credentials haven't changed, reuse it!
+            if self._has_valid_session() and not credentials_changed:
+                logger.info("♻️  Reusing existing authenticated session")
+                print(f"   ♻️  Reusing existing authenticated session")
+                return self.session
+
             # If credentials changed, clear the cache and reset failure counter
-            if self.current_credentials_key != credentials_key:
-                logger.info("Credentials changed, clearing cabinet cache")
+            if credentials_changed:
+                logger.warning(f"Credentials changed from '{self.current_credentials_key}' to '{credentials_key}' - clearing cabinet cache")
                 self.cabinet_cache = {}
                 self.current_credentials_key = credentials_key
                 self.auth_failure_count = 0
@@ -335,7 +350,13 @@ class DocuWareConnector(BaseConnector):
             print(f"🔐 Authenticating to DocuWare (attempt {self.auth_failure_count + 1})...")
             logger.info(f"Authenticating to DocuWare (attempt {self.auth_failure_count + 1})")
 
-            self.client = docuware.DocuwareClient(server_url)
+            # Only create a new client if we don't have one or credentials changed
+            if not self.client or credentials_changed:
+                logger.debug(f"[AUTH DEBUG] Creating new DocuWare client for {server_url}")
+                self.client = docuware.DocuwareClient(server_url)
+            else:
+                logger.debug(f"[AUTH DEBUG] Reusing existing DocuWare client")
+
             self.session = self.client.login(username, password)
 
             # Reset failure counter on success

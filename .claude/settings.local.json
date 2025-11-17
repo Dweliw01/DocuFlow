@@ -8,7 +8,20 @@
       "Bash(timeout:*)",
       "Bash(curl:*)",
       "Bash(python:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd comprehensive test suite with 139 tests for DocuFlow\n\nImplement complete testing infrastructure with 77% initial pass rate:\n\nTest Coverage:\n- DocuWare connector: 28 tests (authentication, cabinets, dialogs, fields, uploads, table parsing)\n- Field mapping service: 52 tests (auto-mapping, semantic matching, validation, type conversion)\n- AI service: 28 tests (categorization, extraction, prompt building, response parsing)\n- Upload routes: 20 tests (file upload, batch processing, status, downloads, error handling)\n- Connector routes: 10 tests (connection testing, configuration, encryption)\n\nTest Infrastructure:\n- pytest.ini with test markers (unit, integration, connector, slow)\n- conftest.py with comprehensive fixtures and mocks\n- Sample test data for all models\n- Environment variable setup for isolated testing\n- Mock services for external dependencies (Anthropic, DocuWare)\n\nTest Organization:\n- Unit tests for individual components\n- Integration tests for API endpoints\n- Mocked external dependencies\n- Edge case and error handling coverage\n\nUpdated .gitignore to exclude test artifacts and Windows temp files\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(where:*)",
+      "Bash(\"C:\\Users\\Dusha\\AppData\\Local\\Programs\\Python\\Python312\\python.exe\" -m pip install google-auth-oauthlib google-api-python-client google-auth-httplib2)",
+      "Bash(set PYTHONIOENCODING=utf-8:*)",
+      "Bash(find:*)",
+      "Bash(cd:*)",
+      "Bash(taskkill:*)",
+      "Bash(nul)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []

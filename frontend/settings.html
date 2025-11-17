@@ -121,6 +121,145 @@
             </div>
         </div>
 
+        <!-- Review Workflow Settings Card -->
+        <div id="review-settings-card" class="settings-card">
+            <!-- Display Current Review Settings (shown after save) -->
+            <div id="review-settings-display" style="display: none;">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-clipboard-check"></i> Review Workflow
+                    </h2>
+                    <p class="section-description">Current document review configuration</p>
+                </div>
+
+                <div class="config-summary">
+                    <div class="summary-row">
+                        <span class="summary-label">Review Mode:</span>
+                        <span id="current-review-mode" class="summary-value"></span>
+                    </div>
+                    <div class="summary-row" id="current-threshold-row" style="display: none;">
+                        <span class="summary-label">Confidence Threshold:</span>
+                        <span id="current-threshold" class="summary-value"></span>
+                    </div>
+                </div>
+
+                <div class="config-actions">
+                    <button class="btn-secondary" onclick="editReviewSettings()">
+                        <i class="fa-solid fa-edit"></i> Edit Review Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Review Settings Configuration Form (shown when editing) -->
+            <div id="review-settings-form" class="settings-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fa-solid fa-clipboard-check"></i> Review Workflow
+                    </h2>
+                    <p class="section-description">Configure how documents are reviewed before uploading to connectors</p>
+                </div>
+
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="review_mode" value="review_all" checked>
+                        <div class="radio-content">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-user-check" style="color: #3b82f6; font-size: 1.25rem;"></i>
+                                <span class="radio-label">Review All Documents</span>
+                            </div>
+                            <span class="radio-description">
+                                Every document requires manual review and approval before uploading (safest option)
+                            </span>
+                        </div>
+                    </label>
+
+                    <label class="radio-option">
+                        <input type="radio" name="review_mode" value="smart">
+                        <div class="radio-content">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-brain" style="color: #8b5cf6; font-size: 1.25rem;"></i>
+                                <span class="radio-label">Smart Review</span>
+                            </div>
+                            <span class="radio-description">
+                                Automatically upload high-confidence documents, review low-confidence ones
+                            </span>
+                        </div>
+                    </label>
+
+                    <label class="radio-option">
+                        <input type="radio" name="review_mode" value="auto_upload">
+                        <div class="radio-content">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-bolt" style="color: #f59e0b; font-size: 1.25rem;"></i>
+                                <span class="radio-label">Auto-Upload All</span>
+                            </div>
+                            <span class="radio-description">
+                                Automatically upload all documents without review (fastest, but less control)
+                            </span>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Confidence Threshold (only shown for Smart Review) -->
+                <div id="confidence-threshold-section" style="display: none; margin-top: 1.5rem; padding: 1.5rem; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; font-weight: 600; color: #374151; margin-bottom: 0.5rem;">
+                            Confidence Threshold
+                        </label>
+                        <p style="font-size: 0.875rem; color: #6b7280;">
+                            Documents with AI confidence above this threshold will be auto-uploaded. Lower confidence documents will require manual review.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <input type="range" id="confidence-threshold-slider" min="0" max="100" value="90"
+                               style="flex: 1; height: 8px; border-radius: 4px; background: #e5e7eb; outline: none;"
+                               oninput="updateThresholdDisplay(this.value)">
+                        <div style="
+                            min-width: 80px;
+                            padding: 0.5rem 1rem;
+                            background: white;
+                            border: 2px solid #3b82f6;
+                            border-radius: 8px;
+                            text-align: center;
+                            font-weight: 700;
+                            color: #3b82f6;
+                            font-size: 1.125rem;
+                        ">
+                            <span id="threshold-value">90</span>%
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 1rem; padding: 1rem; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+                        <p style="font-size: 0.875rem; color: #1e40af; margin: 0;">
+                            <i class="fa-solid fa-info-circle"></i>
+                            <strong>Recommendation:</strong> Start with 90% threshold. Documents with 90%+ confidence will be auto-uploaded, while lower confidence documents will require your review.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Review Settings Status Alert -->
+                <div id="review-settings-status" class="alert" style="display: none; margin-top: 1rem;"></div>
+
+                <div class="section-actions">
+                    <button id="save-review-settings-btn" class="btn-primary" onclick="saveReviewSettings()" style="
+                        background: #3b82f6;
+                        color: white;
+                        padding: 0.75rem 1.5rem;
+                        border: none;
+                        border-radius: 8px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                    ">
+                        <i class="fa-solid fa-save"></i> Save Review Settings
+                    </button>
+                </div>
+            </div>
+            <!-- End of review-settings-form -->
+        </div>
+        <!-- End of review-settings-card -->
+
         <!-- Settings Card -->
         <div id="settings-setup-card" class="settings-card">
             <!-- Section: Upload Destination -->

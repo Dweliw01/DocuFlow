@@ -2,7 +2,11 @@
 Database connection and schema management for DocuFlow.
 Uses SQLite for MVP with async support via aiosqlite.
 """
-import aiosqlite
+import sqlite3
+try:
+    import aiosqlite
+except ImportError:
+    aiosqlite = None  # Allow synchronous operations if aiosqlite not installed
 import json
 import logging
 from typing import Optional, List, Dict, Any
@@ -13,6 +17,21 @@ logger = logging.getLogger(__name__)
 
 # Database file path
 DB_PATH = Path(__file__).parent.parent / "docuflow.db"
+
+
+def get_db_connection():
+    """
+    Get a synchronous SQLite database connection.
+    Used for non-async code paths like the review workflow.
+
+    Returns:
+        sqlite3.Connection: Database connection with row factory enabled
+    """
+    conn = sqlite3.connect(str(DB_PATH), timeout=30.0)  # 30 second timeout
+    conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrent access
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
 
 
 async def init_database():
@@ -218,11 +237,14 @@ async def init_database():
         logger.info("Database initialized successfully with multi-tenant support")
 
 
-async def get_db() -> aiosqlite.Connection:
+async def get_db() -> Any:
     """Get database connection."""
-    db = await aiosqlite.connect(DB_PATH)
+    if aiosqlite is None:
+        raise RuntimeError("aiosqlite is not installed. Please install it to use async database operations.")
+    db = await aiosqlite.connect(DB_PATH, timeout=30.0)
     db.row_factory = aiosqlite.Row
     await db.execute("PRAGMA foreign_keys = ON")
+    await db.execute("PRAGMA journal_mode=WAL")
     return db
 
 
@@ -477,6 +499,16 @@ async def save_connector_config(
     """
     db = await get_db()
     try:
+        # Get user's organization_id
+        cursor = await db.execute(
+            "SELECT organization_id FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        if not row or not row[0]:
+            raise ValueError(f"User {user_id} has no organization")
+        organization_id = row[0]
+
         # Deactivate ALL existing active connectors for this user (only one connector active at a time)
         await db.execute(
             "UPDATE connector_configs SET is_active = FALSE WHERE user_id = ?",
@@ -484,7 +516,7 @@ async def save_connector_config(
         )
         logger.debug(f"Deactivated all existing connectors for user {user_id}")
 
-        # Insert new config
+        # Insert new config to connector_configs (user-level, for backward compatibility)
         config_json = json.dumps(config_data)
         cursor = await db.execute(
             """INSERT INTO connector_configs
@@ -492,9 +524,26 @@ async def save_connector_config(
                VALUES (?, ?, ?, TRUE, ?)""",
             (user_id, connector_type, config_json, datetime.utcnow().isoformat())
         )
-        await db.commit()
         config_id = cursor.lastrowid
-        logger.info(f"Saved {connector_type} config {config_id} for user {user_id} (set as active connector)")
+
+        # ALSO save to organization_settings (organization-level, for upload service)
+        # First, delete existing config for this organization + connector type
+        await db.execute(
+            """DELETE FROM organization_settings
+               WHERE organization_id = ? AND connector_type = ?""",
+            (organization_id, connector_type)
+        )
+
+        # Then insert the new config
+        await db.execute(
+            """INSERT INTO organization_settings
+               (organization_id, connector_type, config_encrypted, is_active, created_by_user_id)
+               VALUES (?, ?, ?, 1, ?)""",
+            (organization_id, connector_type, config_json, user_id)
+        )
+
+        await db.commit()
+        logger.info(f"Saved {connector_type} config {config_id} for user {user_id} and organization {organization_id} (set as active connector)")
         return config_id
     finally:
         await db.close()
@@ -545,15 +594,32 @@ async def update_connector_last_used(config_id: int):
 
 
 async def delete_connector_config(user_id: int, connector_type: str):
-    """Delete connector configuration for a user."""
+    """Delete connector configuration for a user and their organization."""
     db = await get_db()
     try:
+        # Get user's organization
+        cursor = await db.execute(
+            "SELECT organization_id FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        organization_id = row[0] if row else None
+
+        # Delete from connector_configs (user-level)
         await db.execute(
             "DELETE FROM connector_configs WHERE user_id = ? AND connector_type = ?",
             (user_id, connector_type)
         )
+
+        # Delete from organization_settings (org-level)
+        if organization_id:
+            await db.execute(
+                "DELETE FROM organization_settings WHERE organization_id = ? AND connector_type = ?",
+                (organization_id, connector_type)
+            )
+
         await db.commit()
-        logger.info(f"Deleted {connector_type} config for user {user_id}")
+        logger.info(f"Deleted {connector_type} config for user {user_id} and organization {organization_id}")
     finally:
         await db.close()
 

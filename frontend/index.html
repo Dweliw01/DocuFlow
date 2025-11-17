@@ -289,7 +289,7 @@
 
         .pricing-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 2rem;
             margin-top: 3rem;
         }
@@ -400,7 +400,16 @@
 
         /* ===== Responsive ===== */
         @media (max-width: 1024px) {
-            .features-grid,
+            .pricing-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
             .pricing-grid {
                 grid-template-columns: 1fr;
             }
@@ -582,62 +591,24 @@
             <div class="pricing-grid">
                 <!-- Free Trial -->
                 <div class="pricing-card">
-                    <div class="pricing-name">Free Trial</div>
-                    <div class="pricing-description">Perfect for testing DocuFlow</div>
+                    <div class="pricing-name">Trial</div>
+                    <div class="pricing-description">Perfect for testing</div>
                     <div class="pricing-price">
-                        $0
-                        <span>/ 14 days</span>
+                        Free
+                        <span>14 days</span>
                     </div>
                     <ul class="pricing-features">
                         <li>
                             <svg viewBox="0 0 24 24" fill="none">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            <span>50 documents included</span>
+                            <span>50 documents</span>
                         </li>
                         <li>
                             <svg viewBox="0 0 24 24" fill="none">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            <span>All AI features</span>
-                        </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>DocuWare & Google Drive</span>
-                        </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>Email support</span>
-                        </li>
-                    </ul>
-                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Start Free Trial</a>
-                </div>
-
-                <!-- Pay Per Document (Featured) -->
-                <div class="pricing-card featured">
-                    <div class="pricing-badge">Most Flexible</div>
-                    <div class="pricing-name">Pay Per Document</div>
-                    <div class="pricing-description">Only pay for what you use</div>
-                    <div class="pricing-price">
-                        $0.10
-                        <span>/ document</span>
-                    </div>
-                    <ul class="pricing-features">
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>No monthly commitment</span>
-                        </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>Unlimited documents</span>
+                            <span>AI-powered processing</span>
                         </li>
                         <li>
                             <svg viewBox="0 0 24 24" fill="none">
@@ -649,31 +620,101 @@
                             <svg viewBox="0 0 24 24" fill="none">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            <span>Priority support</span>
-                        </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>99.9% SLA</span>
+                            <span>No credit card required</span>
                         </li>
                     </ul>
-                    <a href="/login.html" class="btn btn-primary" style="width: 100%;">Get Started</a>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Start Free Trial</a>
                 </div>
 
-                <!-- Enterprise -->
-                <div class="pricing-card">
-                    <div class="pricing-name">Enterprise</div>
-                    <div class="pricing-description">For large teams & custom needs</div>
+                <!-- Starter (Featured) -->
+                <div class="pricing-card featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <div class="pricing-name">Starter</div>
+                    <div class="pricing-description">Small businesses</div>
                     <div class="pricing-price">
-                        Custom
+                        $29
+                        <span>/ month</span>
                     </div>
                     <ul class="pricing-features">
                         <li>
                             <svg viewBox="0 0 24 24" fill="none">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            <span>Volume discounts</span>
+                            <span>500 documents/month</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>AI-powered processing</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>All integrations</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Email support</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-primary" style="width: 100%;">Get Started</a>
+                </div>
+
+                <!-- Professional -->
+                <div class="pricing-card">
+                    <div class="pricing-name">Professional</div>
+                    <div class="pricing-description">Mid-market</div>
+                    <div class="pricing-price">
+                        $99
+                        <span>/ month</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>2,500 documents/month</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>AI-powered processing</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Custom field mappings</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Priority support</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Get Started</a>
+                </div>
+
+                <!-- Enterprise -->
+                <div class="pricing-card">
+                    <div class="pricing-name">Enterprise</div>
+                    <div class="pricing-description">Large organizations</div>
+                    <div class="pricing-price">
+                        $299
+                        <span>/ month</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>10,000 documents/month</span>
                         </li>
                         <li>
                             <svg viewBox="0 0 24 24" fill="none">
@@ -685,22 +726,16 @@
                             <svg viewBox="0 0 24 24" fill="none">
                                 <polyline points="20 6 9 17 4 12"/>
                             </svg>
+                            <span>Custom field mappings</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
                             <span>Dedicated support</span>
                         </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>SSO & advanced security</span>
-                        </li>
-                        <li>
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                            <span>On-premise options</span>
-                        </li>
                     </ul>
-                    <a href="mailto:sales@docuflow.com" class="btn btn-secondary" style="width: 100%;">Contact Sales</a>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Get Started</a>
                 </div>
             </div>
         </div>

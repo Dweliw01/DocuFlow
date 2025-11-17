@@ -5,6 +5,7 @@ Reads environment variables from .env file and provides app-wide settings.
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -55,7 +56,7 @@ class Settings(BaseSettings):
 
     class Config:
         """Pydantic configuration"""
-        env_file = ".env"
+        env_file = str(Path(__file__).parent.parent / ".env")
         case_sensitive = False
 
     def __init__(self, **kwargs):

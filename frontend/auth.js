@@ -280,9 +280,12 @@ async function authenticatedFetch(url, options = {}) {
             headers
         });
 
-        // Handle 401 Unauthorized - redirect to login
+        // Handle 401 Unauthorized - clear expired token and redirect to login
         if (response.status === 401) {
-            console.warn('Authentication expired, redirecting to login');
+            console.warn('Authentication expired, clearing token and redirecting to login');
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            currentUser = null;
             window.location.href = '/login.html';
             throw new Error('Authentication expired');
         }

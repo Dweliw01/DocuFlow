@@ -21,7 +21,8 @@
       "Bash(cd:*)",
       "Bash(taskkill:*)",
       "Bash(nul)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(start chrome --new-window http://localhost:8000/dashboard.html)"
     ],
     "deny": [],
     "ask": []

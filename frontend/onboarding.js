@@ -17,12 +17,9 @@ const onboardingData = {
  * Initialize onboarding flow
  */
 async function initOnboarding() {
-    console.log('[Onboarding] Initializing...');
-
     // Check if user is authenticated
     const authenticated = await isAuthenticated();
     if (!authenticated) {
-        console.log('[Onboarding] Not authenticated, redirecting to login');
         window.location.href = '/login.html';
         return;
     }
@@ -33,12 +30,9 @@ async function initOnboarding() {
         const data = await response.json();
 
         if (data.has_organization) {
-            console.log('[Onboarding] User already has organization, redirecting to dashboard');
             window.location.href = '/dashboard.html';
             return;
         }
-
-        console.log('[Onboarding] User needs onboarding');
 
         // Store user email and pre-fill org name from email domain
         if (data.user_email) {
@@ -58,7 +52,6 @@ async function initOnboarding() {
             }
         }
     } catch (error) {
-        console.error('[Onboarding] Error checking onboarding status:', error);
         showError('step1Error', 'Failed to load onboarding status. Please refresh the page.');
     }
 
@@ -108,8 +101,6 @@ function validateStep1() {
     // Update data
     onboardingData.orgName = orgName;
 
-    console.log('[Onboarding] Step 1 validated:', onboardingData);
-
     // Move to next step
     nextStep();
 }
@@ -118,8 +109,6 @@ function validateStep1() {
  * Create organization (Step 2 → Step 3)
  */
 async function createOrganization() {
-    console.log('[Onboarding] Creating organization...');
-
     // Get selected plan
     const selectedPlan = document.querySelector('input[name="plan"]:checked').value;
     onboardingData.plan = selectedPlan;
@@ -152,13 +141,11 @@ async function createOrganization() {
         }
 
         const organization = await response.json();
-        console.log('[Onboarding] Organization created:', organization);
 
         // Move to success step
         nextStep();
 
     } catch (error) {
-        console.error('[Onboarding] Error creating organization:', error);
         showError('step2Error', error.message || 'Failed to create organization. Please try again.');
 
         // Re-enable button
@@ -230,7 +217,6 @@ function updateUI() {
  * Redirect to dashboard after completion
  */
 function goToDashboard() {
-    console.log('[Onboarding] Redirecting to dashboard...');
     window.location.href = '/dashboard.html';
 }
 

@@ -267,6 +267,9 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                             f"{review_result['status']} (confidence: {confidence_score:.2f})"
                         )
 
+                        # Add document ID to result so it's included in batch results
+                        result.id = doc_id
+
                     finally:
                         conn.close()
 
@@ -583,10 +586,32 @@ async def get_batch_status(
         raise HTTPException(status_code=404, detail="Batch not found or access denied")
 
     # Convert results from JSON strings back to DocumentResult objects
+    # and add document IDs by looking them up from the database
     results = []
     if batch.get("results"):
-        for result_dict in batch["results"]:
-            results.append(DocumentResult(**result_dict))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            for result_dict in batch["results"]:
+                # Look up document ID by filename (get most recent)
+                # Note: For old batches, batch_id might not match, so we just use filename
+                filename = result_dict.get('filename')
+
+                cursor.execute('''
+                    SELECT id FROM document_metadata
+                    WHERE filename = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ''', (filename,))
+
+                doc_row = cursor.fetchone()
+                if doc_row:
+                    result_dict['id'] = doc_row['id']
+
+                results.append(DocumentResult(**result_dict))
+        finally:
+            conn.close()
 
     return BatchResultResponse(
         batch_id=batch_id,

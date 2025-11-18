@@ -64,8 +64,6 @@ function initializeApp() {
     if (clearBtn) clearBtn.addEventListener('click', clearFiles);
     if (downloadBtn) downloadBtn.addEventListener('click', downloadResults);
     if (newBatchBtn) newBatchBtn.addEventListener('click', resetApp);
-
-    console.log('[App] Initialized with upload button:', uploadBtn ? 'Found' : 'Not found');
 }
 
 // Initialize when DOM is ready
@@ -126,11 +124,7 @@ function addFiles(files) {
 }
 
 function renderFileList() {
-    console.log('[FileList] Rendering file list, files:', selectedFiles.length);
-    console.log('[FileList] Elements exist?', {fileList: !!fileList, uploadControls: !!uploadControls});
-
     if (!fileList || !uploadControls) {
-        console.error('[FileList] Required DOM elements not found!');
         return;
     }
 
@@ -153,8 +147,6 @@ function renderFileList() {
             </div>
         `).join('')}
     `;
-
-    console.log('[FileList] File list rendered, controls shown');
 }
 
 function clearFiles() {
@@ -174,35 +166,22 @@ function formatFileSize(bytes) {
 // ============================================================================
 
 async function uploadDocuments() {
-    console.log('[Upload] uploadDocuments called, selectedFiles:', selectedFiles.length);
-
     if (selectedFiles.length === 0) {
-        console.warn('[Upload] No files selected');
         alert('Please select files to upload');
         return;
     }
 
     // Show processing section
-    console.log('[Upload] Hiding upload section, showing processing section');
-    console.log('[Upload] uploadSection exists?', !!uploadSection);
-    console.log('[Upload] processingSection exists?', !!processingSection);
-
     if (uploadSection) {
         uploadSection.classList.add('hidden');
-        console.log('[Upload] uploadSection hidden');
-    } else {
-        console.error('[Upload] uploadSection not found!');
     }
 
     if (processingSection) {
         processingSection.classList.remove('hidden');
-        console.log('[Upload] processingSection shown');
         // Scroll to processing section
         setTimeout(() => {
             processingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 100);
-    } else {
-        console.error('[Upload] processingSection not found!');
     }
 
     try {
@@ -210,11 +189,9 @@ async function uploadDocuments() {
         const formData = new FormData();
         selectedFiles.forEach(file => {
             formData.append('files', file);
-            console.log('[Upload] Added file:', file.name, file.size);
         });
 
         // Upload files
-        console.log('[Upload] Starting upload...');
         if (processingStatus) processingStatus.textContent = 'Uploading files...';
         if (progressFill) progressFill.style.width = '10%';
 
@@ -223,17 +200,13 @@ async function uploadDocuments() {
             body: formData
         });
 
-        console.log('[Upload] Response status:', response.status);
-
         if (!response.ok) {
             const error = await response.json();
-            console.error('[Upload] Server error:', error);
             throw new Error(error.detail || 'Upload failed');
         }
 
         const data = await response.json();
         currentBatchId = data.batch_id;
-        console.log('[Upload] Batch created:', currentBatchId);
 
         if (processingStatus) processingStatus.textContent = 'Upload complete! Processing documents...';
         if (progressFill) progressFill.style.width = '20%';
@@ -242,8 +215,7 @@ async function uploadDocuments() {
         await pollBatchStatus();
 
     } catch (error) {
-        console.error('[Upload] Upload error:', error);
-        alert('Upload failed: ' + error.message + '\n\nCheck the browser console for details.');
+        alert('Upload failed: ' + error.message);
         resetApp();
     }
 }
@@ -252,29 +224,18 @@ async function pollBatchStatus() {
     const pollInterval = 500; // Poll every 0.5 seconds for faster updates
     let lastProcessedCount = 0;
 
-    console.log('[Poll] Starting to poll batch status for:', currentBatchId);
-    console.log('[Poll] processingDetails exists?', !!processingDetails);
-    console.log('[Poll] progressFill exists?', !!progressFill);
-    console.log('[Poll] processingStatus exists?', !!processingStatus);
-
     // Add initial message
     addProcessingLog(`🚀 Starting batch processing: ${selectedFiles.length} files`, 'info');
 
-    let pollCount = 0;
     while (true) {
-        pollCount++;
-        console.log(`[Poll] Poll attempt #${pollCount}`);
-
         try {
             const response = await authenticatedFetch(`${API_BASE}/status/${currentBatchId}`);
-            console.log(`[Poll] Response status: ${response.status}`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch status');
             }
 
             const data = await response.json();
-            console.log(`[Poll] Batch status:`, data.status, `Processed: ${data.processed_files}/${data.total_files}`);
 
             // Update progress bar (20% reserved for upload, 70% for processing, 10% for organizing)
             const processingProgress = (data.processed_files / data.total_files) * 70;
@@ -299,7 +260,6 @@ async function pollBatchStatus() {
 
             // Check if completed
             if (data.status === 'completed') {
-                console.log('[Poll] Batch completed! Showing results...');
                 addProcessingLog('📦 Organizing files and creating ZIP...', 'info');
                 if (processingStatus) processingStatus.textContent = 'Organizing files and creating ZIP...';
                 if (progressFill) progressFill.style.width = '100%';
@@ -308,9 +268,7 @@ async function pollBatchStatus() {
                 await new Promise(resolve => setTimeout(resolve, 500));
 
                 addProcessingLog('✅ Processing complete!', 'success');
-                console.log('[Poll] Calling showResults with data:', data);
                 showResults(data);
-                console.log('[Poll] showResults completed, breaking poll loop');
                 break;
             }
 
@@ -318,7 +276,6 @@ async function pollBatchStatus() {
             await new Promise(resolve => setTimeout(resolve, pollInterval));
 
         } catch (error) {
-            console.error('Polling error:', error);
             // Continue polling even if one request fails
             await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
@@ -326,10 +283,7 @@ async function pollBatchStatus() {
 }
 
 function addProcessingLog(message, type = 'info') {
-    console.log(`[ProcessingLog] ${type.toUpperCase()}: ${message}`);
-
     if (!processingDetails) {
-        console.error('[ProcessingLog] processingDetails element not found!');
         return;
     }
 
@@ -338,7 +292,6 @@ function addProcessingLog(message, type = 'info') {
     logEntry.textContent = message;
 
     processingDetails.appendChild(logEntry);
-    console.log('[ProcessingLog] Log entry added, total entries:', processingDetails.children.length);
 
     // Auto-scroll to bottom
     processingDetails.scrollTop = processingDetails.scrollHeight;
@@ -349,11 +302,7 @@ function addProcessingLog(message, type = 'info') {
 // ============================================================================
 
 function showResults(data) {
-    console.log('[Results] Showing results for batch:', currentBatchId);
-    console.log('[Results] Data:', data);
-
     // Hide processing, show results
-    console.log('[Results] Hiding processing section, showing results section');
     processingSection.classList.add('hidden');
     resultsSection.classList.remove('hidden');
 
@@ -426,12 +375,10 @@ function showResults(data) {
 
     // Refresh dashboard stats to show updated document counts
     // Add a small delay to give backend time to update usage logs
-    console.log('[Results] Refreshing dashboard stats in 2 seconds...');
     setTimeout(() => {
-        console.log('[Results] Now refreshing stats and pending documents...');
-        loadStatsOverview().catch(err => console.error('[Results] Failed to refresh stats:', err));
-        loadRecentActivity().catch(err => console.error('[Results] Failed to refresh activity:', err));
-        loadPendingDocuments().catch(err => console.error('[Results] Failed to refresh pending documents:', err));
+        loadStatsOverview();
+        loadRecentActivity();
+        loadPendingDocuments();
     }, 2000);
 }
 
@@ -463,7 +410,7 @@ function renderDocumentCard(doc, docId) {
     );
 
     return `
-        <div class="doc-card">
+        <div class="doc-card" id="doc-card-${doc.id}">
             <div class="doc-card-header" onclick="toggleExtractedData('${docId}')">
                 <div class="doc-card-title">
                     <span class="doc-expand-icon" id="icon-${docId}">
@@ -473,9 +420,17 @@ function renderDocumentCard(doc, docId) {
                     </span>
                     <span class="doc-filename">${doc.filename}</span>
                 </div>
-                <span class="confidence-badge ${getConfidenceClass(doc.confidence)}">
-                    ${(doc.confidence * 100).toFixed(0)}%
-                </span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="confidence-badge ${getConfidenceClass(doc.confidence)}">
+                        ${(doc.confidence * 100).toFixed(0)}%
+                    </span>
+                    <button class="btn-review" onclick="event.stopPropagation(); reviewDocument(${doc.id})" title="Review & Edit Document">
+                        <i class="fa-solid fa-file-pen"></i> Review
+                    </button>
+                    <button class="btn-delete-doc" onclick="event.stopPropagation(); deleteDocument(${doc.id}, '${doc.filename}')" title="Delete Document">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
             </div>
             ${hasData ? renderExtractedDataCard(doc, docId) : ''}
         </div>
@@ -488,11 +443,6 @@ function renderExtractedDataCard(doc, docId) {
     }
 
     const data = doc.extracted_data;
-
-    // Debug logging for line items
-    if (data.line_items && data.line_items.length > 0) {
-        console.log(`[ExtractedData] Document ${doc.filename} has ${data.line_items.length} line items:`, data.line_items);
-    }
 
     // Build key-value pairs
     const sections = [];
@@ -682,15 +632,12 @@ function downloadResults() {
 }
 
 function resetApp() {
-    console.log('[App] Resetting app for new batch');
-
     // Reset state
     selectedFiles = [];
     currentBatchId = null;
     fileInput.value = '';
 
     // Reset UI
-    console.log('[App] Showing upload section, hiding processing and results');
     uploadSection.classList.remove('hidden');
     processingSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
@@ -703,8 +650,7 @@ function resetApp() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Refresh dashboard stats
-    console.log('[App] Refreshing dashboard stats...');
-    loadStatsOverview().catch(err => console.error('[App] Failed to refresh stats:', err));
+    loadStatsOverview();
 }
 
 // ============================================================================
@@ -715,8 +661,6 @@ function resetApp() {
  * Load complete dashboard (main entry point for dashboard page)
  */
 async function loadDashboard() {
-    console.log('[Dashboard] Loading dashboard...');
-
     try {
         // Display user info first
         if (typeof displayUserInfo === 'function') {
@@ -735,10 +679,8 @@ async function loadDashboard() {
         if (refreshBtn) {
             refreshBtn.addEventListener('click', loadRecentActivity);
         }
-
-        console.log('[Dashboard] Dashboard loaded successfully');
     } catch (error) {
-        console.error('[Dashboard] Error loading dashboard:', error);
+        // Error loading dashboard
     }
 }
 
@@ -752,7 +694,6 @@ async function loadOrganizationContext() {
         if (orgResponse.ok) {
             const data = await orgResponse.json();
             currentOrganization = data.organization;
-            console.log('[App] Loaded organization:', currentOrganization);
 
             // Update navbar with organization name
             updateOrganizationDisplay();
@@ -762,20 +703,18 @@ async function loadOrganizationContext() {
         const usageResponse = await authenticatedFetch('/api/organizations/usage');
         if (usageResponse.ok) {
             usageStats = await usageResponse.json();
-            console.log('[App] Loaded usage stats:', usageStats);
         }
 
         // Load subscription status
         const subResponse = await authenticatedFetch('/api/organizations/subscription-status');
         if (subResponse.ok) {
             const subscriptionStatus = await subResponse.json();
-            console.log('[App] Loaded subscription status:', subscriptionStatus);
 
             // Display subscription banner
             displaySubscriptionBanner(subscriptionStatus);
         }
     } catch (error) {
-        console.error('[App] Error loading organization context:', error);
+        // Error loading organization context
     }
 }
 
@@ -871,7 +810,6 @@ function displaySubscriptionBanner(status) {
 
     // Handle errors gracefully
     if (!status || !status.subscription) {
-        console.warn('[App] Invalid subscription status, hiding banner');
         banner.style.display = 'none';
         return;
     }
@@ -1009,7 +947,6 @@ async function loadStatsOverview() {
         }
 
         const status = await subResponse.json();
-        console.log('[StatsOverview] API response:', status);
 
         // Validate response
         if (!status || !status.subscription || !status.usage || !status.cost) {
@@ -1019,9 +956,6 @@ async function loadStatsOverview() {
         const sub = status.subscription;
         const usage = status.usage;
         const cost = status.cost;
-
-        console.log('[StatsOverview] Documents processed:', usage.documents_processed);
-        console.log('[StatsOverview] Total cost:', cost.total);
 
         // Build stats cards
         const cards = [];
@@ -1107,7 +1041,6 @@ async function loadStatsOverview() {
         container.innerHTML = cards.join('');
 
     } catch (error) {
-        console.error('[Dashboard] Error loading stats overview:', error);
         container.innerHTML = `
             <div style="
                 grid-column: 1 / -1;
@@ -1236,7 +1169,6 @@ async function loadRecentActivity() {
         container.innerHTML = batchesHTML;
 
     } catch (error) {
-        console.error('[Dashboard] Error loading recent activity:', error);
         container.innerHTML = `
             <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
                 <p>Failed to load recent activity. Please try again.</p>
@@ -1249,19 +1181,16 @@ async function loadRecentActivity() {
  * Load pending review documents
  */
 async function loadPendingDocuments() {
-    console.log('[Dashboard] Loading pending documents...');
     const section = document.getElementById('pendingReviewSection');
     const container = document.getElementById('pendingDocuments');
     const countBadge = document.getElementById('pendingCount');
 
     if (!section || !container) {
-        console.warn('[Dashboard] Pending review section elements not found');
         return;
     }
 
     try {
         // Get pending documents
-        console.log('[Dashboard] Fetching from /api/documents/pending...');
         const response = await authenticatedFetch('/api/documents/pending');
         if (!response.ok) {
             throw new Error('Failed to load pending documents');
@@ -1270,11 +1199,8 @@ async function loadPendingDocuments() {
         const data = await response.json();
         const documents = data.documents || [];
 
-        console.log(`[Dashboard] Received ${documents.length} pending documents:`, documents);
-
         if (documents.length === 0) {
             // Hide section if no pending documents
-            console.log('[Dashboard] No pending documents, hiding section');
             section.style.display = 'none';
             return;
         }
@@ -1342,6 +1268,23 @@ async function loadPendingDocuments() {
                                 Review
                                 <i class="fa-solid fa-arrow-right" style="margin-left: 0.5rem;"></i>
                             </button>
+                            <button onclick="event.stopPropagation(); deletePendingDocument(${doc.id}, '${doc.filename}')" style="
+                                background: transparent;
+                                color: var(--gray-500);
+                                border: 1px solid var(--gray-300);
+                                padding: 0.5rem;
+                                border-radius: 6px;
+                                font-size: 1rem;
+                                cursor: pointer;
+                                transition: all 0.2s;
+                                width: 2rem;
+                                height: 2rem;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            " onmouseover="this.style.background='#fee2e2'; this.style.color='#dc2626'; this.style.borderColor='#fca5a5';" onmouseout="this.style.background='transparent'; this.style.color='var(--gray-500)'; this.style.borderColor='var(--gray-300)';" title="Delete document">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1349,10 +1292,8 @@ async function loadPendingDocuments() {
         }).join('');
 
         container.innerHTML = documentsHTML;
-        console.log('[Dashboard] Successfully rendered pending documents section');
 
     } catch (error) {
-        console.error('[Dashboard] Error loading pending documents:', error);
         section.style.display = 'none';
     }
 }
@@ -1391,8 +1332,6 @@ window.toggleBatchDetails = async function(batchId) {
  * Load and display batch details with document cards
  */
 async function loadBatchDetails(batchId, containerElement) {
-    console.log('[BatchDetails] Loading details for batch:', batchId);
-
     // Show loading state
     containerElement.innerHTML = `
         <div style="text-align: center; padding: 2rem;">
@@ -1410,13 +1349,11 @@ async function loadBatchDetails(batchId, containerElement) {
         }
 
         const data = await response.json();
-        console.log('[BatchDetails] Batch data:', data);
 
         // Render batch details similar to results view
         renderBatchDetailsView(data, containerElement);
 
     } catch (error) {
-        console.error('[BatchDetails] Error loading batch details:', error);
         containerElement.innerHTML = `
             <div style="text-align: center; padding: 2rem; color: var(--gray-500);">
                 <p>Failed to load batch details. Please try again.</p>
@@ -1525,8 +1462,109 @@ function renderBatchDetailsView(data, containerElement) {
     ` : '';
 
     containerElement.innerHTML = summaryHTML + documentsHTML + failedHTML + downloadHTML;
+}
 
-    console.log(`[BatchDetails] Rendered ${Object.keys(byCategory).length} categories with cards in expanded state by default`);
+// ============================================================================
+// Review Document
+// ============================================================================
+
+/**
+ * Navigate to review page for a specific document
+ */
+function reviewDocument(documentId) {
+    // Add mode=view for Recent Activity documents (read-only)
+    window.location.href = `/pdf-viewer.html?id=${documentId}&mode=view`;
+}
+
+/**
+ * Delete a pending document
+ */
+async function deleteDocument(documentId, filename) {
+    // Confirm deletion
+    const confirmed = confirm(`Are you sure you want to delete "${filename}"?\n\nThis action cannot be undone.`);
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        // Get auth token
+        const token = await getToken();
+
+        const response = await fetch(`/api/documents/${documentId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete document');
+        }
+
+        const result = await response.json();
+
+        // Remove the document card from the DOM
+        const cardElement = document.getElementById(`doc-card-${documentId}`);
+        if (cardElement) {
+            // Fade out animation
+            cardElement.style.transition = 'opacity 0.3s, transform 0.3s';
+            cardElement.style.opacity = '0';
+            cardElement.style.transform = 'scale(0.95)';
+
+            // Remove after animation
+            setTimeout(() => {
+                cardElement.remove();
+            }, 300);
+        }
+
+        // Show success message
+        alert(`"${filename}" has been deleted successfully.`);
+
+    } catch (error) {
+        alert(`Failed to delete document: ${error.message}`);
+    }
+}
+
+/**
+ * Delete a pending review document from dashboard
+ */
+async function deletePendingDocument(documentId, filename) {
+    // Confirm deletion
+    const confirmed = confirm(`Are you sure you want to delete "${filename}"?\n\nThis action cannot be undone.`);
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        // Get auth token
+        const token = await getToken();
+
+        const response = await fetch(`/api/documents/${documentId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to delete document');
+        }
+
+        const result = await response.json();
+
+        // Reload pending documents to update the list
+        await loadPendingDocuments();
+
+        // Show success message
+        alert(`"${filename}" has been deleted successfully.`);
+
+    } catch (error) {
+        alert(`Failed to delete document: ${error.message}`);
+    }
 }
 
 // ============================================================================

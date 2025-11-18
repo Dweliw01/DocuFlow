@@ -35,7 +35,6 @@ async function initAuth() {
 
         return auth0Client;
     } catch (error) {
-        console.error('Auth initialization error:', error);
         throw error;
     }
 }
@@ -46,32 +45,23 @@ async function initAuth() {
  */
 async function isAuthenticated() {
     try {
-        console.log('[Auth] Checking authentication...');
-
         // First check if we have a token in localStorage
         const storedToken = localStorage.getItem('auth_token');
-        console.log('[Auth] Stored token exists:', !!storedToken);
 
         if (storedToken) {
-            console.log('[Auth] User authenticated via localStorage');
             return true;
         }
 
         // If no stored token, check Auth0 client
-        console.log('[Auth] No stored token, checking Auth0 client...');
         if (!auth0Client) {
-            console.log('[Auth] Initializing Auth0 client...');
             await initAuth();
         }
 
         const authenticated = await auth0Client.isAuthenticated();
-        console.log('[Auth] Auth0 client authentication result:', authenticated);
         return authenticated;
     } catch (error) {
-        console.error('[Auth] Authentication check error:', error);
         // Final fallback: check localStorage
         const fallback = !!localStorage.getItem('auth_token');
-        console.log('[Auth] Fallback authentication result:', fallback);
         return fallback;
     }
 }
@@ -85,7 +75,6 @@ async function getToken() {
         // First try localStorage (fastest and most reliable for stored sessions)
         const storedToken = localStorage.getItem('auth_token');
         if (storedToken) {
-            console.log('[Auth] Using stored token from localStorage');
             return storedToken;
         }
 
@@ -96,17 +85,14 @@ async function getToken() {
 
         // Get access token from Auth0
         const token = await auth0Client.getTokenSilently();
-        console.log('[Auth] Got fresh token from Auth0');
 
         // Store for future use
         localStorage.setItem('auth_token', token);
         return token;
     } catch (error) {
-        console.error('[Auth] Token retrieval error:', error);
         // Check localStorage one more time as fallback
         const fallbackToken = localStorage.getItem('auth_token');
         if (fallbackToken) {
-            console.log('[Auth] Using fallback token from localStorage');
             return fallbackToken;
         }
         throw error;
@@ -155,7 +141,6 @@ async function getCurrentUser() {
                     }
                 }
             } catch (backendError) {
-                console.warn('Could not fetch user from backend, using Auth0 user:', backendError);
                 // Continue with Auth0 user
             }
         }
@@ -163,7 +148,6 @@ async function getCurrentUser() {
         currentUser = user;
         return user;
     } catch (error) {
-        console.error('Get user error:', error);
         return null;
     }
 }
@@ -202,7 +186,6 @@ async function logout() {
             window.location.href = '/login.html';
         }
     } catch (error) {
-        console.error('Logout error:', error);
         // Force redirect to login even if logout fails
         window.location.href = '/login.html';
     }
@@ -214,19 +197,12 @@ async function logout() {
  * @returns {Promise<void>}
  */
 async function requireAuth() {
-    console.log('[Auth] requireAuth called from:', window.location.pathname);
     const authenticated = await isAuthenticated();
-    console.log('[Auth] requireAuth result:', authenticated);
 
     if (!authenticated) {
-        console.log('[Auth] Not authenticated, redirecting to login...');
-        console.log('[Auth] Token exists:', !!localStorage.getItem('auth_token'));
-        console.log('[Auth] User exists:', !!localStorage.getItem('user'));
         window.location.href = '/login.html';
         return false;
     }
-
-    console.log('[Auth] Authentication successful!');
 
     // Check if user needs onboarding (only for main app pages, not onboarding page itself)
     const currentPath = window.location.pathname;
@@ -239,15 +215,11 @@ async function requireAuth() {
                 const data = await response.json();
 
                 if (data.needs_onboarding) {
-                    console.log('[Auth] User needs onboarding, redirecting...');
                     window.location.href = '/onboarding.html';
                     return false;
                 }
-
-                console.log('[Auth] User has organization:', data.organization_id);
             }
         } catch (error) {
-            console.warn('[Auth] Could not check onboarding status:', error);
             // Continue anyway - backend will handle it
         }
     }
@@ -282,7 +254,6 @@ async function authenticatedFetch(url, options = {}) {
 
         // Handle 401 Unauthorized - clear expired token and redirect to login
         if (response.status === 401) {
-            console.warn('Authentication expired, clearing token and redirecting to login');
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
             currentUser = null;
@@ -292,7 +263,6 @@ async function authenticatedFetch(url, options = {}) {
 
         return response;
     } catch (error) {
-        console.error('Authenticated fetch error:', error);
         throw error;
     }
 }
@@ -333,7 +303,7 @@ async function displayUserInfo(elementId = 'userInfo') {
             document.getElementById('logoutBtn').addEventListener('click', logout);
         }
     } catch (error) {
-        console.error('Display user info error:', error);
+        // Error displaying user info
     }
 }
 

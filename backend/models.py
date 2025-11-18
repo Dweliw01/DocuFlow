@@ -275,6 +275,7 @@ class DocumentResult(BaseModel):
     Result of processing a single document.
     Contains categorization info, confidence score, extracted text preview, and structured data.
     """
+    id: Optional[int] = None  # Document database ID (for review/edit functionality)
     filename: str
     original_path: str
     category: DocumentCategory

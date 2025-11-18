@@ -222,6 +222,31 @@ async def get_document(
                 'created_at': corr['created_at']
             }
 
+        # Get connector configuration (for line items table columns)
+        # Always fetch the active connector config for the organization
+        connector_config = None
+        logger.info(f"[CONNECTOR-CONFIG] Org ID: {current_user['organization_id']}")
+
+        cursor.execute('''
+            SELECT config_encrypted, connector_type FROM organization_settings
+            WHERE organization_id = ? AND is_active = 1
+            ORDER BY updated_at DESC
+            LIMIT 1
+        ''', (current_user['organization_id'],))
+
+        config_row = cursor.fetchone()
+        logger.info(f"[CONNECTOR-CONFIG] Config row found: {config_row is not None}")
+
+        if config_row:
+            try:
+                connector_config = json.loads(config_row['config_encrypted'])
+                logger.info(f"[CONNECTOR-CONFIG] Parsed config successfully, connector type: {config_row['connector_type']}")
+                if 'docuware' in connector_config and 'selected_table_columns' in connector_config.get('docuware', {}):
+                    logger.info(f"[CONNECTOR-CONFIG] Table columns: {list(connector_config['docuware']['selected_table_columns'].keys())}")
+            except Exception as e:
+                logger.error(f"[CONNECTOR-CONFIG] Failed to parse config: {e}")
+                pass
+
         return {
             'id': doc['id'],
             'filename': doc['filename'],
@@ -232,7 +257,8 @@ async def get_document(
             'extracted_data': extracted_data,
             'corrections': corrections_dict,
             'created_at': doc['created_at'],
-            'connector_type': doc['connector_type']
+            'connector_type': doc['connector_type'],
+            'connector_config': connector_config  # Include connector config for line items
         }
 
     finally:
@@ -645,3 +671,82 @@ def _get_source_field_for_level(level_type: str) -> str:
         'person_name': 'person_name'
     }
     return field_mapping.get(level_type, level_type)
+
+
+@router.delete("/{doc_id}")
+async def delete_document(
+    doc_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Delete a pending document and its associated data.
+
+    Args:
+        doc_id: Document ID to delete
+        current_user: Current authenticated user
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: If document not found or user unauthorized
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Check document exists and user has permission
+        cursor.execute('''
+            SELECT id, file_path, status, organization_id
+            FROM document_metadata
+            WHERE id = ?
+        ''', (doc_id,))
+
+        doc = cursor.fetchone()
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Verify user has access to this document's organization
+        if doc['organization_id'] != current_user['organization_id']:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+
+        # Only allow deletion of pending or rejected documents
+        if doc['status'] not in ['pending_review', 'rejected']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete document with status '{doc['status']}'. Only pending or rejected documents can be deleted."
+            )
+
+        # Delete associated field corrections
+        cursor.execute('DELETE FROM field_corrections WHERE document_id = ?', (doc_id,))
+
+        # Delete the document metadata
+        cursor.execute('DELETE FROM document_metadata WHERE id = ?', (doc_id,))
+
+        # Delete the physical file if it exists
+        if doc['file_path'] and os.path.exists(doc['file_path']):
+            try:
+                os.remove(doc['file_path'])
+                logger.info(f"Deleted file: {doc['file_path']}")
+            except Exception as e:
+                logger.warning(f"Could not delete file {doc['file_path']}: {e}")
+
+        conn.commit()
+
+        logger.info(f"Document {doc_id} deleted by user {current_user['email']}")
+
+        return {
+            "success": True,
+            "message": "Document deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Failed to delete document {doc_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        conn.close()

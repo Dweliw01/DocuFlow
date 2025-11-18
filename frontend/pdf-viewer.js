@@ -12,6 +12,7 @@ let corrections = {};
 let currentEditingField = null;
 let highlightMode = false;
 let highlightTargetField = null;
+let connectorConfig = null;  // Store connector configuration for line items
 
 // PDF.js configuration
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -19,6 +20,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // Get document ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const docId = urlParams.get('id');
+const viewMode = urlParams.get('mode'); // 'view' for read-only, null for review mode
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -26,6 +28,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('No document ID provided', 'error');
         setTimeout(() => window.location.href = '/dashboard.html', 2000);
         return;
+    }
+
+    // Hide approve/reject buttons if in view-only mode
+    if (viewMode === 'view') {
+        const actionButtons = document.getElementById('action-buttons');
+        if (actionButtons) {
+            actionButtons.style.display = 'none';
+        }
     }
 
     // Initialize resizable divider
@@ -57,6 +67,9 @@ async function loadDocument() {
         }
 
         currentDocument = await response.json();
+
+        // Store connector configuration if available
+        connectorConfig = currentDocument.connector_config;
 
         // Update UI with document info
         document.getElementById('doc-title').textContent = currentDocument.filename;
@@ -331,13 +344,24 @@ function startEditField(fieldName) {
     // Replace with input
     fieldItem.classList.add('editing');
     valueDiv.innerHTML = `
-        <input type="text" class="field-input" value="${currentValue}"
-               onkeydown="handleFieldKeydown(event, '${fieldName}')" autofocus>
+        <div style="position: relative; display: flex; align-items: center;">
+            <input type="text" class="field-input" id="input-${fieldName}" value="${currentValue}"
+                   onkeydown="handleFieldKeydown(event, '${fieldName}')" autofocus
+                   style="padding-right: 2.5rem;">
+            <button class="btn-clear-input"
+                    onclick="event.stopPropagation(); document.getElementById('input-${fieldName}').value = ''; document.getElementById('input-${fieldName}').focus();"
+                    style="position: absolute; right: 0.5rem; background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.25rem; padding: 0.25rem; display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; transition: all 0.2s;"
+                    onmouseover="this.style.background='#f3f4f6'; this.style.color='#374151';"
+                    onmouseout="this.style.background='none'; this.style.color='#9ca3af';"
+                    title="Clear field">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
         <div class="field-actions">
-            <button class="btn-save" onclick="saveFieldCorrection('${fieldName}')">
+            <button class="btn-save" onclick="event.stopPropagation(); saveFieldCorrection('${fieldName}')">
                 <i class="fa-solid fa-check"></i> Save
             </button>
-            <button class="btn-cancel" onclick="cancelEditField('${fieldName}')">
+            <button class="btn-cancel" onclick="event.stopPropagation(); cancelEditField('${fieldName}')">
                 <i class="fa-solid fa-xmark"></i> Cancel
             </button>
         </div>
@@ -411,11 +435,25 @@ async function saveFieldCorrection(fieldName) {
             throw new Error('Failed to save correction');
         }
 
-        // Update UI
+        // Update UI - restore normal display with new value
         const valueDiv = fieldItem.querySelector('.field-value');
-        valueDiv.textContent = newValue;
+
+        // Force browser re-render
+        const originalDisplay = fieldItem.style.display;
+        fieldItem.style.display = 'none';
+        void fieldItem.offsetHeight;
+
+        valueDiv.innerHTML = newValue || '<em style="color: #9ca3af;">Empty</em>';
         valueDiv.dataset.original = originalValue;
+
+        // Restore onclick handler
+        valueDiv.onclick = function() { startEditField(fieldName); };
+
         fieldItem.classList.remove('editing');
+
+        // Show element again
+        fieldItem.style.display = originalDisplay || '';
+        void fieldItem.offsetHeight;
 
         // Add corrected indicator
         const fieldLabel = fieldItem.querySelector('.field-name');
@@ -445,18 +483,53 @@ async function saveFieldCorrection(fieldName) {
  */
 function cancelEditField(fieldName) {
     const fieldItem = document.querySelector(`[data-field="${fieldName}"]`);
+
+    if (!fieldItem) {
+        return;
+    }
+
     const valueDiv = fieldItem.querySelector('.field-value');
+
+    if (!valueDiv) {
+        return;
+    }
+
     const originalValue = corrections[fieldName] ?
         corrections[fieldName].corrected_value :
         valueDiv.dataset.original;
 
-    valueDiv.textContent = originalValue;
+    // Restore the original HTML structure (not just text)
+    const displayValue = originalValue || '<em style="color: #9ca3af;">Empty</em>';
+
+    // Force browser re-render by temporarily hiding element
+    const originalDisplay = fieldItem.style.display;
+    fieldItem.style.display = 'none';
+
+    // Force reflow
+    void fieldItem.offsetHeight;
+
+    // Update content
+    valueDiv.innerHTML = displayValue;
+
+    // Restore onclick handler
+    valueDiv.onclick = function() { startEditField(fieldName); };
+
+    // Remove editing class
     fieldItem.classList.remove('editing');
+
+    // Show element again
+    fieldItem.style.display = originalDisplay || '';
+
+    // Force another reflow
+    void fieldItem.offsetHeight;
 
     // Disable highlight mode
     highlightMode = false;
     highlightTargetField = null;
-    document.getElementById('highlight-mode').classList.remove('active');
+    const highlightModeEl = document.getElementById('highlight-mode');
+    if (highlightModeEl) {
+        highlightModeEl.classList.remove('active');
+    }
     currentEditingField = null;
 }
 
@@ -734,6 +807,21 @@ function goBack() {
     window.location.href = '/dashboard.html';
 }
 
+// Explicitly expose functions to global scope for inline onclick handlers
+window.startEditField = startEditField;
+window.saveFieldCorrection = saveFieldCorrection;
+window.cancelEditField = cancelEditField;
+window.handleFieldKeydown = handleFieldKeydown;
+window.approveDocument = approveDocument;
+window.rejectDocument = rejectDocument;
+window.goBack = goBack;
+window.openLineItemsModal = openLineItemsModal;
+window.closeLineItemsModal = closeLineItemsModal;
+window.addLineItem = addLineItem;
+window.deleteLineItem = deleteLineItem;
+window.updateLineItemField = updateLineItemField;
+window.saveLineItems = saveLineItems;
+
 /**
  * Show toast notification
  */
@@ -819,13 +907,75 @@ function renderLineItemsEditor() {
         return;
     }
 
-    // Get all unique field names from all line items
-    const allFields = new Set();
-    editingLineItems.forEach(item => {
-        Object.keys(item).forEach(key => allFields.add(key));
-    });
+    let fields = [];
 
-    const fields = Array.from(allFields);
+    // If DocuWare is configured, use those fields as the base
+    // Otherwise, get fields from existing line items
+    if (connectorConfig?.docuware?.selected_table_columns) {
+        const selectedTableColumns = connectorConfig.docuware.selected_table_columns;
+        // Get the first table's columns (assuming single table)
+        const tableNames = Object.keys(selectedTableColumns);
+
+        if (tableNames.length > 0) {
+            const selectedColumns = selectedTableColumns[tableNames[0]];
+
+            // Extract labels from column objects (they're {name, label, type})
+            const columnLabels = selectedColumns.map(col => {
+                if (typeof col === 'object' && col.label) {
+                    return col.label;
+                }
+                return col; // Fallback if it's already a string
+            });
+
+            // Create field name mapping (DocuWare names -> PRIMARY field name)
+            // Only map to ONE field per column to avoid duplicates
+            const fieldMapping = {
+                'item number': 'sku',
+                'item_number': 'sku',
+                'description': 'description',
+                'qty': 'quantity',
+                'quantity': 'quantity',
+                'rate': 'unit_price',
+                'unit_price': 'unit_price',
+                'unit price': 'unit_price',
+                'amount': 'amount',
+                'unit': 'unit',
+                'tax': 'tax',
+                'discount': 'discount',
+                'customer': 'customer',
+                'taxable': 'taxable',
+                'item_id': 'item_id',
+                'pack_size': 'pack_size',
+                'pack size': 'pack_size',
+                'total': 'total',
+                'price': 'unit_price',
+                'item no': 'sku',
+                'item_no': 'sku',
+                'product_name': 'description',
+                'product name': 'description'
+            };
+
+            // Build list of allowed field names based on selected columns
+            // Use only the PRIMARY field for each column (no duplicates)
+            const allowedFields = new Set();
+            columnLabels.forEach(col => {
+                const colLower = col.toLowerCase().trim(); // Trim whitespace
+                // Map to primary field name
+                const primaryField = fieldMapping[colLower] || colLower;
+                allowedFields.add(primaryField);
+            });
+
+            // Build fields array from DocuWare configuration
+            fields = Array.from(allowedFields);
+        }
+    } else {
+        // No DocuWare config - get fields from existing line items
+        const allFields = new Set();
+        editingLineItems.forEach(item => {
+            Object.keys(item).forEach(key => allFields.add(key));
+        });
+        fields = Array.from(allFields);
+    }
 
     let html = '';
 
@@ -844,7 +994,27 @@ function renderLineItemsEditor() {
         `;
 
         fields.forEach(field => {
-            const value = item[field] || '';
+            // Try to find the value using multiple field name variations
+            let value = '';
+            const fieldVariations = {
+                'quantity': ['quantity', 'qty'],
+                'qty': ['qty', 'quantity'],
+                'unit_price': ['unit_price', 'rate', 'price'],
+                'sku': ['sku', 'item_number', 'item_code'],
+                'description': ['description', 'item_description'],
+                'pack_size': ['pack_size', 'pack size'],
+                'total': ['total', 'amount']
+            };
+
+            // Check all variations for this field
+            const variations = fieldVariations[field] || [field];
+            for (const variation of variations) {
+                if (item[variation] !== undefined && item[variation] !== null && item[variation] !== '') {
+                    value = item[variation];
+                    break;
+                }
+            }
+
             const displayName = field.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
             html += `
@@ -884,12 +1054,31 @@ function addLineItem() {
             newItem[key] = '';
         });
     } else {
-        // Default fields for new line item
-        newItem.description = '';
-        newItem.quantity = '';
-        newItem.unit = '';
-        newItem.unit_price = '';
-        newItem.amount = '';
+        // Check if we have DocuWare table columns configured
+        if (connectorConfig?.docuware?.selected_table_columns) {
+            const selectedTableColumns = connectorConfig.docuware.selected_table_columns;
+            const tableNames = Object.keys(selectedTableColumns);
+
+            if (tableNames.length > 0) {
+                const selectedColumns = selectedTableColumns[tableNames[0]];
+                // Create fields based on selected columns
+                selectedColumns.forEach(col => {
+                    newItem[col.toLowerCase()] = '';
+                });
+            } else {
+                // Fallback to default fields
+                newItem.description = '';
+                newItem.quantity = '';
+                newItem.unit_price = '';
+                newItem.amount = '';
+            }
+        } else {
+            // Default fields for new line item (no DocuWare config)
+            newItem.description = '';
+            newItem.quantity = '';
+            newItem.unit_price = '';
+            newItem.amount = '';
+        }
     }
 
     editingLineItems.push(newItem);

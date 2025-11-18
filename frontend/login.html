@@ -411,10 +411,25 @@
         document.getElementById('googleLoginBtn').addEventListener('click', async () => {
             showLoading('google');
             try {
+                // Clear Auth0 cache to force fresh login
+                if (auth0Client) {
+                    await auth0Client.logout({
+                        logoutParams: {
+                            returnTo: window.location.origin + '/login.html'
+                        },
+                        openUrl: false  // Don't redirect, just clear cache
+                    });
+                }
+
+                // Small delay to ensure cache is cleared
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Now login with account selection
                 await auth0Client.loginWithRedirect({
                     authorizationParams: {
                         redirect_uri: window.location.origin + '/login.html',
-                        connection: 'google-oauth2'
+                        connection: 'google-oauth2',
+                        prompt: 'select_account'
                     }
                 });
             } catch (error) {

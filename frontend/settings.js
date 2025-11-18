@@ -405,10 +405,7 @@ async function getFieldSuggestions(fields) {
         state.fieldSuggestions = result.suggestions || {};
         state.confidenceScores = result.confidence_scores || {};
         state.requiredFields = result.required_fields || [];
-
-        console.log(`✨ Found ${result.suggested_field_count} suggested field mappings`);
     } catch (error) {
-        console.error('Failed to get field suggestions:', error);
         // Don't fail the whole flow if suggestions fail
         state.fieldSuggestions = {};
         state.confidenceScores = {};
@@ -519,15 +516,13 @@ function buildFieldSelection(docuwareFields) {
                     <p class="field-group-description">These fields are required by DocuWare and should be extracted from documents</p>
                     <div class="field-checkboxes">
                         ${requiredFields.map(field => {
-                            const suggested = isSuggested(field.name);
                             return `
-                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
+                            <label class="field-checkbox">
                                 <input
                                     type="checkbox"
                                     class="field-checkbox-input"
                                     data-field-name="${field.name}"
                                     data-required="true"
-                                    ${suggested ? 'checked' : ''}
                                 >
                                 <span class="field-name">${field.name}</span>
                                 <span class="field-badge field-badge-required">Required</span>
@@ -543,15 +538,13 @@ function buildFieldSelection(docuwareFields) {
                     <p class="field-group-description">Select which optional fields AI should try to extract</p>
                     <div class="field-checkboxes">
                         ${optionalFields.map(field => {
-                            const suggested = isSuggested(field.name);
                             return `
-                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
+                            <label class="field-checkbox">
                                 <input
                                     type="checkbox"
                                     class="field-checkbox-input"
                                     data-field-name="${field.name}"
                                     data-required="false"
-                                    ${suggested ? 'checked' : ''}
                                 >
                                 <span class="field-name">${field.name}</span>
                             </label>
@@ -1578,11 +1571,6 @@ async function saveReviewSettings() {
         }
 
         // Send update request
-        console.log('Sending review settings update:', {
-            review_mode: reviewMode,
-            confidence_threshold: confidenceThreshold
-        });
-
         const response = await fetch('/api/organizations/review-settings', {
             method: 'PATCH',
             headers: {
@@ -1594,8 +1582,6 @@ async function saveReviewSettings() {
                 confidence_threshold: confidenceThreshold
             })
         });
-
-        console.log('Response status:', response.status, response.statusText);
 
         if (!response.ok) {
             let errorMessage = 'Failed to save review settings';

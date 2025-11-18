@@ -753,12 +753,13 @@ class DocuWareConnector(BaseConnector):
         try:
             # Map line item fields to column names
             # This mapping connects AI-extracted field names to DocuWare column names
+            # IMPORTANT: List more specific terms first, avoid overly generic terms
             field_mapping = {
-                'description': ['DESCRIPTION', 'DESC', 'ITEM_DESC', 'PRODUCT', 'ITEM'],
+                'sku': ['ITEM_NUMBER', 'SKU', 'PRODUCT_CODE', 'ITEM_CODE', 'PRODUCT_SERVICE'],
+                'description': ['DESCRIPTION', 'DESC', 'ITEM_DESC', 'PRODUCT_NAME', 'ITEM_DESCRIPTION'],
                 'quantity': ['QTY', 'QUANTITY', 'ITEM_QTY'],
                 'unit_price': ['RATE', 'UNIT_PRICE', 'PRICE', 'ITEM_RATE'],
-                'amount': ['AMOUNT', 'TOTAL', 'LINE_TOTAL', 'ITEM_AMOUNT'],
-                'sku': ['ITEM_NUMBER', 'SKU', 'PRODUCT_CODE', 'ITEM_CODE', 'PRODUCT_SERVICE'],
+                'amount': ['AMOUNT', 'LINE_AMOUNT', 'LINE_TOTAL', 'ITEM_AMOUNT'],
                 'tax': ['TAX', 'TAXABLE', 'TAX_AMOUNT'],
                 'unit': ['UNIT', 'UOM'],
                 'discount': ['DISCOUNT']
@@ -846,18 +847,83 @@ class DocuWareConnector(BaseConnector):
         """
         column_upper = column_name.upper()
 
-        # Check each line item field
+        # First pass: Check for exact matches
         for line_field, possible_columns in field_mapping.items():
-            # Check if this column matches any of the possible names
             for possible_name in possible_columns:
-                if possible_name in column_upper or column_upper in possible_name:
-                    # Found a match, return the value from line_item
+                if column_upper == possible_name:
                     value = line_item.get(line_field)
                     if value is not None:
+                        logger.debug(f"[TABLE MAPPING] Exact match: {column_name} -> {line_field} = {value}")
                         return value
 
+        # Second pass: Check if column name contains the possible name (with word boundaries)
+        # This allows ITEM_NUMBER to match ITEM but not ITEM to match ITEM_NUMBER
+        for line_field, possible_columns in field_mapping.items():
+            for possible_name in possible_columns:
+                # Only match if possible_name is a complete word in column_upper
+                # E.g., "ITEM_NUMBER" contains "ITEM" as a word (separated by _)
+                # But "ITEM" does not contain "ITEM_NUMBER"
+                if len(possible_name) < len(column_upper):
+                    # Check if possible_name is at the start followed by separator
+                    if column_upper.startswith(possible_name + '_') or column_upper.startswith(possible_name + ' '):
+                        value = line_item.get(line_field)
+                        if value is not None:
+                            logger.debug(f"[TABLE MAPPING] Prefix match: {column_name} -> {line_field} = {value}")
+                            return value
+                    # Check if possible_name is at the end preceded by separator
+                    if column_upper.endswith('_' + possible_name) or column_upper.endswith(' ' + possible_name):
+                        value = line_item.get(line_field)
+                        if value is not None:
+                            logger.debug(f"[TABLE MAPPING] Suffix match: {column_name} -> {line_field} = {value}")
+                            return value
+                    # Check if possible_name is in the middle with separators
+                    if '_' + possible_name + '_' in column_upper or ' ' + possible_name + ' ' in column_upper:
+                        value = line_item.get(line_field)
+                        if value is not None:
+                            logger.debug(f"[TABLE MAPPING] Middle match: {column_name} -> {line_field} = {value}")
+                            return value
+
+        logger.warning(f"[TABLE MAPPING] No match found for column: {column_name}")
         # If no mapping found, return None
         return None
+
+    def _clean_field_value(self, field_name: str, value: Any) -> str:
+        """
+        Clean field values for DocuWare, especially numeric/currency fields.
+
+        Args:
+            field_name: Name of the field
+            value: Raw value
+
+        Returns:
+            Cleaned value suitable for DocuWare
+        """
+        if value is None or value == '':
+            return ''
+
+        str_value = str(value)
+
+        # Fields that might contain currency or numeric values with formatting
+        numeric_fields = ['AMOUNT', 'TOTAL', 'SUBTOTAL', 'TAX', 'PRICE', 'COST', 'RATE']
+
+        # Check if this field name contains any numeric field keywords
+        is_numeric = any(keyword in field_name.upper() for keyword in numeric_fields)
+
+        if is_numeric:
+            # Remove currency symbols and thousand separators
+            cleaned = str_value.replace('$', '').replace('€', '').replace('£', '')
+            cleaned = cleaned.replace(',', '').replace(' ', '').strip()
+
+            # Validate it's a valid number
+            try:
+                float(cleaned)
+                logger.debug(f"Cleaned numeric field {field_name}: '{str_value}' -> '{cleaned}'")
+                return cleaned
+            except ValueError:
+                # Not a valid number, return as-is
+                pass
+
+        return str_value
 
     async def get_storage_locations(self, credentials: Dict[str, str]) -> List[Dict[str, str]]:
         """
@@ -1068,9 +1134,12 @@ class DocuWareConnector(BaseConnector):
 
                 # Add regular index fields
                 for field_name, value in index_data.items():
+                    # Clean numeric/currency values for decimal fields
+                    cleaned_value = self._clean_field_value(field_name, value)
+
                     field_entry = {
                         "FieldName": field_name,
-                        "Item": str(value),
+                        "Item": str(cleaned_value),
                         "ItemElementName": "String"
                     }
                     fields_payload["Field"].append(field_entry)

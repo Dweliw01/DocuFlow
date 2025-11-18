@@ -473,3 +473,175 @@ async def get_ai_learning_statistics(
     except Exception as e:
         logger.error(f"Failed to get learning statistics: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{doc_id}/folder-preview")
+async def get_folder_preview(
+    doc_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get Google Drive folder path preview for a document.
+    Shows where the document will be organized based on extracted data.
+
+    Args:
+        doc_id: Document ID
+        current_user: Current authenticated user
+
+    Returns:
+        Dict with folder_path, folder_levels, and connector_type
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Get document
+        cursor.execute('''
+            SELECT * FROM document_metadata
+            WHERE id = ? AND organization_id = ?
+        ''', (doc_id, current_user['organization_id']))
+
+        doc = cursor.fetchone()
+        if not doc:
+            raise HTTPException(status_code=404, detail='Document not found')
+
+        # Get organization's active connector config
+        cursor.execute('''
+            SELECT connector_type, config_encrypted
+            FROM organization_settings
+            WHERE organization_id = ? AND is_active = 1
+            ORDER BY updated_at DESC
+            LIMIT 1
+        ''', (current_user['organization_id'],))
+
+        connector_config = cursor.fetchone()
+
+        if not connector_config:
+            return {
+                'connector_type': None,
+                'folder_path': None,
+                'message': 'No active connector configured'
+            }
+
+        connector_type = connector_config['connector_type']
+
+        # Only Google Drive has dynamic folder structure
+        if connector_type != 'google_drive':
+            return {
+                'connector_type': connector_type,
+                'folder_path': None,
+                'message': f'{connector_type} does not use folder organization'
+            }
+
+        # Parse config and extracted data
+        config_dict = json.loads(connector_config['config_encrypted'])
+        extracted_data_dict = json.loads(doc['extracted_data']) if doc['extracted_data'] else {}
+
+        # Get Google Drive config
+        gd_config = config_dict.get('google_drive', config_dict)
+
+        # Build folder path preview using the same logic as the connector
+        from models import ExtractedData, DocumentCategory
+        from connectors.google_drive_connector import GoogleDriveConnector, CATEGORY_FOLDERS
+
+        # Transform extracted data: extract just the 'value' from each field
+        # Database stores: {"vendor": {"value": "ABC", "confidence": 0.8}}
+        # Model expects: {"vendor": "ABC"}
+        extracted_values = {}
+        for key, field_data in extracted_data_dict.items():
+            if isinstance(field_data, dict) and 'value' in field_data:
+                extracted_values[key] = field_data['value']
+            else:
+                extracted_values[key] = field_data
+
+        # Convert extracted data dict to ExtractedData model
+        extracted_data = ExtractedData(**extracted_values)
+
+        # Get category
+        category_str = doc['category']
+        try:
+            category = DocumentCategory(category_str) if category_str else DocumentCategory.OTHER
+        except ValueError:
+            category = DocumentCategory.OTHER
+
+        # Get folder structure config
+        primary_level = gd_config.get('primary_level', 'category')
+        secondary_level = gd_config.get('secondary_level', 'vendor')
+        tertiary_level = gd_config.get('tertiary_level', 'none')
+        root_folder_name = gd_config.get('root_folder_name', 'DocuFlow')
+
+        # Use connector's helper method to extract folder values
+        connector = GoogleDriveConnector()
+
+        folder_levels = []
+        level_details = []
+
+        for level_type in [primary_level, secondary_level, tertiary_level]:
+            if level_type and level_type != 'none':
+                folder_name = connector._extract_folder_value(level_type, extracted_data, category)
+                if folder_name:
+                    # Sanitize folder name
+                    folder_name = connector._sanitize_filename_part(folder_name)
+                    folder_levels.append(folder_name)
+                    level_details.append({
+                        'level_type': level_type,
+                        'folder_name': folder_name,
+                        'source_field': _get_source_field_for_level(level_type)
+                    })
+                else:
+                    level_details.append({
+                        'level_type': level_type,
+                        'folder_name': None,
+                        'source_field': _get_source_field_for_level(level_type),
+                        'missing': True
+                    })
+
+        # If no levels extracted, fallback to category
+        if not folder_levels:
+            category_folder = CATEGORY_FOLDERS.get(category, "Other")
+            folder_levels.append(category_folder)
+            level_details.append({
+                'level_type': 'category',
+                'folder_name': category_folder,
+                'source_field': 'category'
+            })
+
+        # Build full path
+        folder_path = f"/{root_folder_name}/" + "/".join(folder_levels) + "/"
+
+        return {
+            'connector_type': connector_type,
+            'folder_path': folder_path,
+            'root_folder': root_folder_name,
+            'folder_levels': folder_levels,
+            'level_details': level_details,
+            'structure_config': {
+                'primary': primary_level,
+                'secondary': secondary_level,
+                'tertiary': tertiary_level
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate folder preview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        conn.close()
+
+
+def _get_source_field_for_level(level_type: str) -> str:
+    """Get the source field name that populates a folder level."""
+    field_mapping = {
+        'category': 'category',
+        'vendor': 'vendor_name',
+        'client': 'client',
+        'company': 'company',
+        'year': 'invoice_date (year)',
+        'year_month': 'invoice_date (year-month)',
+        'document_type': 'document_type',
+        'person_name': 'person_name'
+    }
+    return field_mapping.get(level_type, level_type)

@@ -280,15 +280,11 @@ class AILearningService:
                 enhanced_data[field_name]['value'] = suggestion['suggested_value']
                 enhanced_data[field_name]['confidence'] = min(1.0,
                     enhanced_data[field_name].get('confidence', 0.5) + suggestion['confidence_boost'])
-                enhanced_data[field_name]['learned'] = True
-                enhanced_data[field_name]['learning_reason'] = suggestion['reason']
             else:
                 # Create new field with suggestion
                 enhanced_data[field_name] = {
                     'value': suggestion['suggested_value'],
-                    'confidence': 0.75,  # Good confidence for learned value
-                    'learned': True,
-                    'learning_reason': suggestion['reason']
+                    'confidence': 0.75  # Good confidence for learned value
                 }
 
             applied.append(field_name)

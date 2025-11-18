@@ -280,14 +280,20 @@ def _build_extracted_data(data_dict: Dict[str, Any]) -> ExtractedData:
                 line_items.append(item)
 
     return ExtractedData(
-        vendor_name=extract_value(data_dict.get('vendor_name')),
-        vendor_address=extract_value(data_dict.get('vendor_address')),
-        invoice_number=extract_value(data_dict.get('invoice_number')),
-        invoice_date=extract_value(data_dict.get('invoice_date')),
+        document_type=extract_value(data_dict.get('document_type')),
+        person_name=extract_value(data_dict.get('person_name')),
+        company=extract_value(data_dict.get('company')),
+        vendor=extract_value(data_dict.get('vendor')),
+        client=extract_value(data_dict.get('client')),
+        date=extract_value(data_dict.get('date')),
         due_date=extract_value(data_dict.get('due_date')),
-        total_amount=extract_value(data_dict.get('total_amount')),
+        amount=extract_value(data_dict.get('amount')),
         currency=extract_value(data_dict.get('currency')),
-        tax_amount=extract_value(data_dict.get('tax_amount')),
+        document_number=extract_value(data_dict.get('document_number')),
+        reference_number=extract_value(data_dict.get('reference_number')),
+        address=extract_value(data_dict.get('address')),
+        email=extract_value(data_dict.get('email')),
+        phone=extract_value(data_dict.get('phone')),
         line_items=line_items,
         other_data=data_dict.get('other_data', {})
     )

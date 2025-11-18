@@ -67,6 +67,9 @@ async function loadDocument() {
         // Render fields
         renderFields(currentDocument.extracted_data, currentDocument.corrections);
 
+        // Load folder preview for Google Drive
+        await loadFolderPreview();
+
         // Load PDF
         await loadPdf(currentDocument.id);
 
@@ -421,6 +424,9 @@ async function saveFieldCorrection(fieldName) {
         }
 
         showToast('Correction saved', 'success');
+
+        // Refresh folder preview if field affects folder path
+        await refreshFolderPreview();
 
     } catch (error) {
         console.error('Error saving correction:', error);
@@ -994,4 +1000,110 @@ function initializeResizableDivider() {
             document.body.style.cursor = '';
         }
     });
+}
+
+/**
+ * Load and display Google Drive folder path preview
+ */
+async function loadFolderPreview() {
+    try {
+        const token = await getToken();
+        if (!token) return;
+
+        const response = await fetch(`/api/documents/${docId}/folder-preview`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            console.error('Failed to load folder preview');
+            return;
+        }
+
+        const data = await response.json();
+        renderFolderPreview(data);
+
+    } catch (error) {
+        console.error('Error loading folder preview:', error);
+    }
+}
+
+/**
+ * Render folder path preview in the UI
+ */
+function renderFolderPreview(data) {
+    const preview = document.getElementById('folder-preview');
+    const content = document.getElementById('folder-preview-content');
+
+    // Only show for Google Drive
+    if (data.connector_type !== 'google_drive') {
+        preview.classList.remove('visible');
+        return;
+    }
+
+    // Show the preview section
+    preview.classList.add('visible');
+
+    // Check if folder path exists
+    if (!data.folder_path) {
+        content.innerHTML = `
+            <div class="folder-warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <div class="folder-warning-text">
+                    Unable to determine folder path. Some required fields may be missing.
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // Render folder path
+    let html = `
+        <div class="folder-path">
+            ${data.folder_path.split('/').filter(p => p).map(folder =>
+                `<i class="fa-solid fa-folder"></i>${folder}`
+            ).join(' <i class="fa-solid fa-chevron-right" style="color: #9ca3af; font-size: 0.75rem; margin: 0 0.25rem;"></i> ')}
+        </div>
+    `;
+
+    // Show which fields populate each level
+    if (data.level_details && data.level_details.length > 0) {
+        const missingLevels = data.level_details.filter(l => l.missing);
+
+        if (missingLevels.length > 0) {
+            html += `
+                <div class="folder-warning">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <div class="folder-warning-text">
+                        <strong>Missing data for folders:</strong> ${missingLevels.map(l => l.source_field).join(', ')}
+                        <br>These folders will be skipped in the path.
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+            <div class="folder-preview-info">
+                <i class="fa-solid fa-info-circle"></i>
+                Based on: ${data.level_details.filter(l => !l.missing).map(l => l.source_field).join(' → ')}
+            </div>
+        `;
+    }
+
+    content.innerHTML = html;
+}
+
+/**
+ * Refresh folder preview (call after field updates)
+ */
+async function refreshFolderPreview() {
+    // Debounce to avoid too many API calls
+    if (window.folderPreviewTimeout) {
+        clearTimeout(window.folderPreviewTimeout);
+    }
+
+    window.folderPreviewTimeout = setTimeout(() => {
+        loadFolderPreview();
+    }, 500); // Wait 500ms after last field change
 }

@@ -482,6 +482,25 @@ class GoogleDriveConnector:
                 levels.append(CATEGORY_FOLDERS.get(category, "Other"))
 
             # Create nested folders starting from root
+            # First, validate that root_folder_id still exists
+            if self.root_folder_id:
+                try:
+                    self.service.files().get(fileId=self.root_folder_id, fields='id').execute()
+                    logger.debug(f"Root folder ID validated: {self.root_folder_id}")
+                except HttpError as e:
+                    if e.resp.status == 404:
+                        # Root folder no longer exists, clear it
+                        logger.warning(f"Cached root folder ID {self.root_folder_id} no longer exists, will recreate")
+                        self.root_folder_id = None
+                        self.folder_cache.clear()  # Clear all cached folders too
+                    else:
+                        raise
+
+            # If root_folder_id is None or was cleared, recreate it
+            if not self.root_folder_id:
+                root_folder_name = storage_config.get('root_folder_name', 'DocuFlow')
+                self.root_folder_id = await self._ensure_root_folder(root_folder_name)
+
             current_folder_id = self.root_folder_id
             folder_path_parts = []
 

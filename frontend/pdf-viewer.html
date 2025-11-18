@@ -516,6 +516,94 @@
             from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
             to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+
+        /* Folder Path Preview */
+        .folder-preview {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 1.5rem;
+            display: none;
+        }
+
+        .folder-preview.visible {
+            display: block;
+        }
+
+        .folder-preview-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6b7280;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .folder-path {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #1f2937;
+            background: white;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        .folder-path i {
+            color: #3b82f6;
+            margin-right: 0.25rem;
+        }
+
+        .folder-preview-info {
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid #e5e7eb;
+            font-size: 0.8rem;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .folder-preview-info i {
+            color: #9ca3af;
+        }
+
+        .folder-loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6b7280;
+            font-size: 0.85rem;
+        }
+
+        .folder-warning {
+            background: #fef3c7;
+            border-color: #fbbf24;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            display: flex;
+            align-items: start;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .folder-warning i {
+            color: #f59e0b;
+            margin-top: 0.1rem;
+        }
+
+        .folder-warning-text {
+            color: #92400e;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -572,6 +660,20 @@
                 <p style="color: #6b7280; font-size: 0.9rem; margin-top: 0.5rem;">
                     Click any field to edit, or highlight text in the PDF to copy it
                 </p>
+            </div>
+
+            <!-- Folder Path Preview (for Google Drive) -->
+            <div class="folder-preview" id="folder-preview">
+                <div class="folder-preview-header">
+                    <i class="fa-brands fa-google-drive"></i>
+                    Storage Location
+                </div>
+                <div id="folder-preview-content">
+                    <div class="folder-loading">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Loading folder path...
+                    </div>
+                </div>
             </div>
 
             <div class="fields-content" id="fields-content">

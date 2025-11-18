@@ -407,27 +407,36 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
         # Step 3: AI Learning - Apply learned suggestions and adjust confidence
         try:
             # Get user's organization_id
-            user = get_user_by_id(user_id)
+            user = await get_user_by_id(user_id)
             if user and user.get('organization_id'):
                 organization_id = user['organization_id']
 
+                # Convert ExtractedData model to dict for AI learning
+                extracted_data_dict = extracted_data.model_dump() if hasattr(extracted_data, 'model_dump') else (
+                    extracted_data.dict() if hasattr(extracted_data, 'dict') else extracted_data
+                )
+
                 # Apply learned suggestions based on correction history
                 enhanced_data, applied_suggestions = ai_learning_service.apply_learned_suggestions(
-                    extracted_data,
+                    extracted_data_dict,
                     organization_id,
                     category=category.value if category else None
                 )
 
                 if applied_suggestions:
                     logger.info(f"[AI LEARNING] Applied {len(applied_suggestions)} learned suggestions: {', '.join(applied_suggestions)}")
-                    extracted_data = enhanced_data
+                    extracted_data_dict = enhanced_data
 
                 # Adjust confidence scores based on error-prone fields
-                extracted_data = ai_learning_service.adjust_confidence_with_learning(
-                    extracted_data,
+                extracted_data_dict = ai_learning_service.adjust_confidence_with_learning(
+                    extracted_data_dict,
                     organization_id,
                     category=category.value if category else None
                 )
+
+                # Convert the enhanced dict back to ExtractedData model
+                from services.connector_service import _build_extracted_data
+                extracted_data = _build_extracted_data(extracted_data_dict)
 
         except Exception as e:
             logger.warning(f"[AI LEARNING] Error applying learning: {e}")

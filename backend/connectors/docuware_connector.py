@@ -914,18 +914,20 @@ class DocuWareConnector(BaseConnector):
             DocuWare table field entry ready for upload
         """
         try:
-            # Map line item fields to column names
-            # This mapping connects AI-extracted field names to DocuWare column names
+            # Map line item fields to column DISPLAY NAMES (more consistent across cabinets)
+            # This mapping connects AI-extracted field names to DocuWare column display labels
+            # Using display names instead of DB field names makes this work across different
+            # cabinet configurations (e.g., "Rate" works whether DB field is RATE1, ITEM__RATE, etc.)
             # IMPORTANT: List more specific terms first, avoid overly generic terms
             field_mapping = {
-                'sku': ['ITEM_NUMBER', 'SKU', 'PRODUCT_CODE', 'ITEM_CODE', 'PRODUCT_SERVICE'],
-                'description': ['DESCRIPTION', 'DESC', 'ITEM_DESC', 'PRODUCT_NAME', 'ITEM_DESCRIPTION'],
-                'quantity': ['QTY', 'QUANTITY', 'ITEM_QTY'],
-                'unit_price': ['RATE1', 'RATE', 'UNIT_PRICE', 'PRICE', 'ITEM_RATE'],  # RATE1 first for exact match
-                'amount': ['AMOUNT', 'LINE_AMOUNT', 'LINE_TOTAL', 'ITEM_AMOUNT'],
-                'tax': ['TAX', 'TAXABLE', 'TAXABLE1', 'TAX_AMOUNT'],  # Added TAXABLE1
-                'unit': ['UNIT', 'UOM'],
-                'discount': ['DISCOUNT']
+                'sku': ['Item Number', 'SKU', 'Product Code', 'Item Code', 'Product Service', 'Product/Service'],
+                'description': ['Description', 'Desc', 'Item Description', 'Product Name', 'Item Desc'],
+                'quantity': ['Qty', 'Quantity', 'Item Qty'],
+                'unit_price': ['Rate', 'Unit Price', 'Price', 'Item Rate', 'Unit Cost'],
+                'amount': ['Amount', 'Line Amount', 'Line Total', 'Item Amount', 'Total'],
+                'tax': ['Tax', 'Taxable', 'Tax Amount', 'Sales Tax'],
+                'unit': ['Unit', 'UOM', 'Unit of Measure'],
+                'discount': ['Discount', 'Disc']
             }
 
             # Build rows from line items
@@ -936,12 +938,13 @@ class DocuWareConnector(BaseConnector):
                 column_values = []
 
                 for column in columns:
-                    col_name = column['name']
-                    col_label = column.get('label', col_name)
+                    col_name = column['name']  # DB field name (used for upload)
+                    col_label = column.get('label', col_name)  # Display name (used for matching)
                     col_type = column.get('type', 'String')
 
-                    # Find matching value from line_item
-                    value = self._find_line_item_value(line_item, col_name, field_mapping)
+                    # Find matching value from line_item using display label
+                    # This makes matching more consistent across different cabinets
+                    value = self._find_line_item_value(line_item, col_label, field_mapping)
 
                     # Determine ItemElementName based on column type
                     if col_type in ['Decimal', 'Currency', 'Money']:
@@ -994,7 +997,7 @@ class DocuWareConnector(BaseConnector):
     def _find_line_item_value(
         self,
         line_item: Dict[str, Any],
-        column_name: str,
+        column_label: str,
         field_mapping: Dict[str, List[str]]
     ) -> Any:
         """
@@ -1002,51 +1005,52 @@ class DocuWareConnector(BaseConnector):
 
         Args:
             line_item: Line item dictionary
-            column_name: DocuWare column name
-            field_mapping: Mapping of line item fields to possible column names
+            column_label: DocuWare column display label (not DB field name)
+            field_mapping: Mapping of line item fields to possible column display labels
 
         Returns:
             Value from line item or None
         """
-        column_upper = column_name.upper()
+        column_upper = column_label.upper()
 
         # First pass: Check for exact matches
         for line_field, possible_columns in field_mapping.items():
             for possible_name in possible_columns:
-                if column_upper == possible_name:
+                if column_upper == possible_name.upper():
                     value = line_item.get(line_field)
                     if value is not None:
-                        logger.debug(f"[TABLE MAPPING] Exact match: {column_name} -> {line_field} = {value}")
+                        logger.debug(f"[TABLE MAPPING] Exact match: '{column_label}' -> {line_field} = {value}")
                         return value
 
-        # Second pass: Check if column name contains the possible name (with word boundaries)
-        # This allows ITEM_NUMBER to match ITEM but not ITEM to match ITEM_NUMBER
+        # Second pass: Check if column label contains the possible name (with word boundaries)
+        # This allows "Item Number" to match "Item" but not "Item" to match "Item Number"
         for line_field, possible_columns in field_mapping.items():
             for possible_name in possible_columns:
+                possible_name_upper = possible_name.upper()
                 # Only match if possible_name is a complete word in column_upper
-                # E.g., "ITEM_NUMBER" contains "ITEM" as a word (separated by _)
-                # But "ITEM" does not contain "ITEM_NUMBER"
-                if len(possible_name) < len(column_upper):
+                # E.g., "ITEM NUMBER" contains "ITEM" as a word (separated by space)
+                # But "ITEM" does not contain "ITEM NUMBER"
+                if len(possible_name_upper) < len(column_upper):
                     # Check if possible_name is at the start followed by separator
-                    if column_upper.startswith(possible_name + '_') or column_upper.startswith(possible_name + ' '):
+                    if column_upper.startswith(possible_name_upper + '_') or column_upper.startswith(possible_name_upper + ' '):
                         value = line_item.get(line_field)
                         if value is not None:
-                            logger.debug(f"[TABLE MAPPING] Prefix match: {column_name} -> {line_field} = {value}")
+                            logger.debug(f"[TABLE MAPPING] Prefix match: '{column_label}' -> {line_field} = {value}")
                             return value
                     # Check if possible_name is at the end preceded by separator
-                    if column_upper.endswith('_' + possible_name) or column_upper.endswith(' ' + possible_name):
+                    if column_upper.endswith('_' + possible_name_upper) or column_upper.endswith(' ' + possible_name_upper):
                         value = line_item.get(line_field)
                         if value is not None:
-                            logger.debug(f"[TABLE MAPPING] Suffix match: {column_name} -> {line_field} = {value}")
+                            logger.debug(f"[TABLE MAPPING] Suffix match: '{column_label}' -> {line_field} = {value}")
                             return value
                     # Check if possible_name is in the middle with separators
-                    if '_' + possible_name + '_' in column_upper or ' ' + possible_name + ' ' in column_upper:
+                    if '_' + possible_name_upper + '_' in column_upper or ' ' + possible_name_upper + ' ' in column_upper:
                         value = line_item.get(line_field)
                         if value is not None:
-                            logger.debug(f"[TABLE MAPPING] Middle match: {column_name} -> {line_field} = {value}")
+                            logger.debug(f"[TABLE MAPPING] Middle match: '{column_label}' -> {line_field} = {value}")
                             return value
 
-        logger.warning(f"[TABLE MAPPING] No match found for column: {column_name}")
+        logger.warning(f"[TABLE MAPPING] No match found for column label: '{column_label}'")
         # If no mapping found, return None
         return None
 

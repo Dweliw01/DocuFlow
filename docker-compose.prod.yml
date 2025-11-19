@@ -1,0 +1,66 @@
+version: '3.8'
+
+# Production Docker Compose configuration
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  backend:
+    environment:
+      ENVIRONMENT: production
+      LOG_LEVEL: warning
+    # Remove volume mounts in production (use image code)
+    volumes:
+      - ./storage:/app/storage
+      # Don't mount backend code in production
+    # Use production-grade server
+    command: ["gunicorn", "backend.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "--timeout", "300"]
+
+  frontend:
+    # Add SSL certificates volume for HTTPS
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro  # SSL certificates
+    ports:
+      - "80:80"
+      - "443:443"
+
+  # Add backup service for database
+  backup:
+    image: postgres:15-alpine
+    container_name: docuflow-backup
+    depends_on:
+      - db
+    environment:
+      PGHOST: db
+      PGDATABASE: docuflow
+      PGUSER: docuflow
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    # Run backup daily at 2 AM
+    entrypoint: |
+      sh -c 'while true; do
+        pg_dump -Fc > /backups/docuflow_$$(date +%Y%m%d_%H%M%S).dump
+        # Keep only last 7 days of backups
+        find /backups -name "*.dump" -mtime +7 -delete
+        sleep 86400
+      done'
+    networks:
+      - docuflow-network
+
+  # Monitoring with Prometheus (optional)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: docuflow-prometheus
+  #   volumes:
+  #     - ./prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus_data:/prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   networks:
+  #     - docuflow-network
+
+volumes:
+  prometheus_data:
+    driver: local

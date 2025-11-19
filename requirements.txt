@@ -1,6 +1,7 @@
 # Web Framework
 fastapi==0.115.2
 uvicorn[standard]==0.32.1
+gunicorn==21.2.0  # Production WSGI server
 
 # File Handling
 python-multipart==0.0.18
@@ -36,7 +37,10 @@ python-jose[cryptography]==3.3.0  # JWT token validation
 requests==2.31.0  # HTTP client for Auth0 API
 
 # Database
-aiosqlite==0.19.0  # Async SQLite driver
+aiosqlite==0.19.0  # Async SQLite driver (development)
+asyncpg==0.29.0  # Async PostgreSQL driver (production)
+psycopg2-binary==2.9.9  # PostgreSQL adapter (production)
+redis==5.0.1  # Redis client for caching
 
 # Testing
 pytest==8.3.4

@@ -95,7 +95,10 @@ function handleDragLeave(e) {
 function handleDrop(e) {
     e.preventDefault();
     uploadBox.classList.remove('drag-over');
-    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.pdf'));
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif'];
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+        allowedExtensions.some(ext => f.name.toLowerCase().endsWith(ext))
+    );
     addFiles(files);
 }
 
@@ -107,9 +110,13 @@ function addFiles(files) {
     }
 
     // Validate file types and sizes
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif'];
     const validFiles = files.filter(file => {
-        if (!file.name.endsWith('.pdf')) {
-            alert(`${file.name} is not a PDF file`);
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        const isValidType = allowedExtensions.some(ext => ext.toLowerCase() === '.' + fileExtension);
+
+        if (!isValidType) {
+            alert(`${file.name} is not a supported file type. Allowed: PDF, JPG, PNG, TIFF, BMP, GIF`);
             return false;
         }
         if (file.size > 50 * 1024 * 1024) {

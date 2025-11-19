@@ -557,7 +557,7 @@ class DocuWareConnector(BaseConnector):
                 # Parse fields from dialog definition
                 for field_def in dialog_definition.get('Fields', []):
                     field_name = field_def.get('DBFieldName')
-                    field_label = field_def.get('DisplayName', field_name)
+                    field_label = field_def.get('DlgLabel', field_name)  # Use dialog label (what users see in DocuWare)
                     field_type = field_def.get('DWFieldType', 'Text')
                     field_length = field_def.get('Length')
                     field_required = field_def.get('NotEmpty', False)

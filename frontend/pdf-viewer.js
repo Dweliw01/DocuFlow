@@ -122,10 +122,56 @@ function updateOverallConfidence(score) {
 }
 
 /**
+ * Get allowed fields based on connector configuration
+ */
+function getAllowedFields() {
+    // If no connector config, show all fields (local/no connector)
+    if (!connectorConfig || !connectorConfig.connector_type) {
+        return null; // null means show all fields
+    }
+
+    const connectorType = connectorConfig.connector_type;
+
+    if (connectorType === 'none' || connectorType === 'local') {
+        return null; // Show all fields
+    }
+
+    if (connectorType === 'docuware') {
+        // Get fields that were selected in DocuWare configuration
+        const allowedFields = new Set();
+
+        // Add regular fields from field_mapping
+        if (connectorConfig.docuware && connectorConfig.docuware.field_mapping) {
+            Object.keys(connectorConfig.docuware.field_mapping).forEach(field => {
+                allowedFields.add(field);
+            });
+        }
+
+        // Add table fields
+        if (connectorConfig.docuware && connectorConfig.docuware.selected_table_columns) {
+            // Table fields are always shown if configured
+            allowedFields.add('line_items');
+        }
+
+        return Array.from(allowedFields);
+    }
+
+    if (connectorType === 'google_drive') {
+        // Google Drive uses folder levels
+        return ['level_1', 'level_2', 'level_3', 'filename'];
+    }
+
+    return null; // Default: show all
+}
+
+/**
  * Render extracted fields in the sidebar
  */
 function renderFields(extractedData, existingCorrections) {
     const container = document.getElementById('fields-content');
+
+    // Get allowed fields based on connector configuration
+    const allowedFields = getAllowedFields();
 
     // Define field groups
     const fieldGroups = {
@@ -143,6 +189,11 @@ function renderFields(extractedData, existingCorrections) {
         const groupFields = [];
 
         for (const fieldName of fieldList) {
+            // Skip if field is not in allowed list (when connector has restrictions)
+            if (allowedFields && !allowedFields.includes(fieldName)) {
+                continue;
+            }
+
             if (extractedData.hasOwnProperty(fieldName)) {
                 const fieldData = extractedData[fieldName];
                 const correction = existingCorrections[fieldName];
@@ -167,6 +218,11 @@ function renderFields(extractedData, existingCorrections) {
     if (extractedData.other_data && typeof extractedData.other_data === 'object') {
         const otherDataFields = [];
         for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
+            // Skip if field is not in allowed list (when connector has restrictions)
+            if (allowedFields && !allowedFields.includes(fieldName)) {
+                continue;
+            }
+
             if (value !== null && value !== undefined) {
                 const correction = existingCorrections[fieldName];
                 otherDataFields.push({
@@ -194,6 +250,11 @@ function renderFields(extractedData, existingCorrections) {
     const additionalFields = [];
 
     for (const [fieldName, fieldData] of Object.entries(extractedData)) {
+        // Skip if field is not in allowed list (when connector has restrictions)
+        if (allowedFields && !allowedFields.includes(fieldName)) {
+            continue;
+        }
+
         if (!knownFields.includes(fieldName) &&
             fieldName !== 'line_items' &&
             fieldName !== 'other_data') {

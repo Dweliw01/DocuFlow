@@ -816,14 +816,14 @@ class DocuWareConnector(BaseConnector):
 
                     # Table fields have DWFieldType = 'Table'
                     if field_type == 'Table':
-                        # Table field column definitions are in DBTableFields
-                        table_columns_def = field_def.get('DBTableFields', [])
-                        logger.debug(f"DBTableFields content: {json.dumps(table_columns_def, indent=2)}")
+                        # Table field column definitions are in DialogTableFieldColumns
+                        table_columns_def = field_def.get('DialogTableFieldColumns', [])
+                        logger.debug(f"DialogTableFieldColumns found: {len(table_columns_def)} columns")
 
                         for col_def in table_columns_def:
                             col_name = col_def.get('DBFieldName')
-                            col_label = col_def.get('DisplayName', col_name)
-                            col_type = col_def.get('DWFieldType', 'String')
+                            col_label = col_def.get('DlgLabel', col_name)  # Use DlgLabel for dialog fields
+                            col_type = col_def.get('DWFieldType', 'Text')
                             col_length = col_def.get('Length')
                             col_required = col_def.get('NotEmpty', False)
 

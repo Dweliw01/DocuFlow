@@ -536,11 +536,73 @@ class DocuWareConnector(BaseConnector):
 
     def _get_fields_sync(self, cabinet_id: str, dialog_id: str) -> List[IndexField]:
         """
-        Synchronous field retrieval using GET document by docID=1.
-        This approach retrieves fields from an actual document, which includes table field definitions.
+        Synchronous field retrieval using dialog definition API (primary)
+        with fallback to document-based retrieval.
+
+        Primary: Dialog definition API - works even with empty cabinets
+        Fallback: Document-based retrieval - used if dialog API fails
         """
         try:
             fields = []
+
+            # PRIMARY METHOD: Get dialog definition first
+            # This contains complete field schema including table column definitions
+            dialog_definition = self._get_dialog_definition(cabinet_id, dialog_id)
+            use_dialog_definition = bool(dialog_definition and dialog_definition.get('Fields'))
+
+            if use_dialog_definition:
+                logger.info(f"Using dialog definition API for field discovery (cabinet {cabinet_id}, dialog {dialog_id})")
+
+                # Parse fields from dialog definition
+                for field_def in dialog_definition.get('Fields', []):
+                    field_name = field_def.get('DBFieldName')
+                    field_label = field_def.get('DisplayName', field_name)
+                    field_type = field_def.get('DWFieldType', 'Text')
+                    field_length = field_def.get('Length')
+                    field_required = field_def.get('NotEmpty', False)
+                    is_system = field_def.get('IsSystemField', False)
+
+                    # Skip system fields
+                    if self._is_system_field(field_name) or is_system:
+                        continue
+
+                    # Check if this is a table field
+                    is_table = (field_type == 'Table')
+                    table_columns = None
+
+                    if is_table:
+                        # Parse table columns from dialog definition
+                        table_columns = self._parse_table_columns_from_dialog(dialog_definition, field_name)
+                        logger.debug(f"Table field {field_name}: Found {len(table_columns) if table_columns else 0} columns from dialog definition")
+
+                    # Map DocuWare types to our types
+                    type_mapping = {
+                        'Text': 'String',
+                        'Decimal': 'Decimal',
+                        'Int': 'Int',
+                        'DateTime': 'DateTime',
+                        'Date': 'Date',
+                        'Memo': 'Memo',
+                        'Table': 'Table'
+                    }
+                    mapped_type = type_mapping.get(field_type, 'String')
+
+                    fields.append(IndexField(
+                        name=field_name,
+                        type=mapped_type,
+                        required=field_required,
+                        max_length=field_length,
+                        validation=None,
+                        is_system_field=is_system,
+                        is_table_field=is_table,
+                        table_columns=table_columns
+                    ))
+
+                logger.info(f"Found {len(fields)} fields from dialog definition")
+                return fields
+
+            # FALLBACK METHOD: Document-based retrieval if dialog definition unavailable
+            logger.info(f"Dialog definition unavailable, falling back to document-based field discovery")
 
             # Get cabinet from cache, or populate cache if empty
             if cabinet_id not in self.cabinet_cache:
@@ -690,6 +752,103 @@ class DocuWareConnector(BaseConnector):
             return False
         except Exception:
             return False
+
+    def _get_dialog_definition(self, cabinet_id: str, dialog_id: str) -> Dict[str, Any]:
+        """
+        Get dialog definition from DocuWare API.
+        This contains field schema including table field column definitions.
+
+        Args:
+            cabinet_id: File cabinet ID
+            dialog_id: Dialog ID
+
+        Returns:
+            Dialog definition dictionary
+        """
+        try:
+            base_url = self.client.conn.base_url
+            dialog_url = f"{base_url}/DocuWare/Platform/FileCabinets/{cabinet_id}/Dialogs/{dialog_id}"
+
+            logger.debug(f"Fetching dialog definition from: {dialog_url}")
+
+            response = self.client.conn.session.get(
+                dialog_url,
+                headers={"Accept": "application/json"}
+            )
+
+            if response.status_code == 200:
+                dialog_data = response.json()
+                logger.debug(f"Successfully retrieved dialog definition for dialog {dialog_id}")
+                return dialog_data
+            else:
+                logger.warning(f"Failed to get dialog definition: HTTP {response.status_code}")
+                return {}
+
+        except Exception as e:
+            logger.error(f"Error fetching dialog definition: {e}", exc_info=True)
+            return {}
+
+    def _parse_table_columns_from_dialog(self, dialog_definition: Dict[str, Any], table_field_name: str) -> List[TableColumn]:
+        """
+        Parse table field column definitions from dialog definition.
+        This works even if the cabinet is empty.
+
+        Args:
+            dialog_definition: Dialog definition from API
+            table_field_name: Name of the table field
+
+        Returns:
+            List of TableColumn objects
+        """
+        columns = []
+
+        try:
+            # Dialog definition contains field definitions
+            fields = dialog_definition.get('Fields', [])
+
+            for field_def in fields:
+                if field_def.get('DBFieldName') == table_field_name:
+                    # Found our table field
+                    field_type = field_def.get('DWFieldType')
+
+                    # Table fields have DWFieldType = 'Table'
+                    if field_type == 'Table':
+                        # Table field column definitions are in DBTableFields
+                        table_columns_def = field_def.get('DBTableFields', [])
+
+                        for col_def in table_columns_def:
+                            col_name = col_def.get('DBFieldName')
+                            col_label = col_def.get('DisplayName', col_name)
+                            col_type = col_def.get('DWFieldType', 'String')
+                            col_length = col_def.get('Length')
+                            col_required = col_def.get('NotEmpty', False)
+
+                            # Map DocuWare field types to our types
+                            type_mapping = {
+                                'Text': 'String',
+                                'Decimal': 'Decimal',
+                                'Int': 'Int',
+                                'DateTime': 'DateTime',
+                                'Date': 'Date',
+                                'Memo': 'Memo'
+                            }
+                            mapped_type = type_mapping.get(col_type, 'String')
+
+                            columns.append(TableColumn(
+                                name=col_name,
+                                label=col_label,
+                                type=mapped_type,
+                                required=col_required,
+                                max_length=col_length
+                            ))
+
+                        logger.debug(f"Parsed {len(columns)} columns from dialog definition for table {table_field_name}")
+                        break
+
+        except Exception as e:
+            logger.error(f"Error parsing table columns from dialog: {e}", exc_info=True)
+
+        return columns
 
     def _parse_table_columns(self, field_data: Dict[str, Any]) -> List[TableColumn]:
         """

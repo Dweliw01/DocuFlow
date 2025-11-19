@@ -285,6 +285,12 @@ async def get_document(
             else:
                 logger.warning(f"[CONNECTOR-CONFIG] No {doc['connector_type']} config found for document")
 
+        # Log final connector_config state before returning
+        if connector_config:
+            logger.info(f"[CONNECTOR-CONFIG] Returning config for document {doc_id}: connector_type={doc['connector_type']}, has_config=True")
+        else:
+            logger.warning(f"[CONNECTOR-CONFIG] Returning NULL config for document {doc_id}: connector_type={doc['connector_type']}")
+
         return {
             'id': doc['id'],
             'filename': doc['filename'],

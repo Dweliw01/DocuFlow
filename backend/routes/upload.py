@@ -608,10 +608,31 @@ async def get_batch_status(
         raise HTTPException(status_code=404, detail="Batch not found or access denied")
 
     # Convert results from JSON strings back to DocumentResult objects
+    # and add document IDs by looking them up from the database
     results = []
     if batch.get("results"):
-        for result_dict in batch["results"]:
-            results.append(DocumentResult(**result_dict))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            for result_dict in batch["results"]:
+                # Look up document ID by filename and batch_id
+                filename = result_dict.get('filename')
+
+                cursor.execute('''
+                    SELECT id FROM document_metadata
+                    WHERE filename = ? AND batch_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ''', (filename, batch_id))
+
+                doc_row = cursor.fetchone()
+                if doc_row:
+                    result_dict['id'] = doc_row['id']
+
+                results.append(DocumentResult(**result_dict))
+        finally:
+            conn.close()
 
     return BatchResultResponse(
         batch_id=batch_id,

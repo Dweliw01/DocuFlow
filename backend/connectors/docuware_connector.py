@@ -921,9 +921,9 @@ class DocuWareConnector(BaseConnector):
                 'sku': ['ITEM_NUMBER', 'SKU', 'PRODUCT_CODE', 'ITEM_CODE', 'PRODUCT_SERVICE'],
                 'description': ['DESCRIPTION', 'DESC', 'ITEM_DESC', 'PRODUCT_NAME', 'ITEM_DESCRIPTION'],
                 'quantity': ['QTY', 'QUANTITY', 'ITEM_QTY'],
-                'unit_price': ['RATE', 'UNIT_PRICE', 'PRICE', 'ITEM_RATE'],
+                'unit_price': ['RATE1', 'RATE', 'UNIT_PRICE', 'PRICE', 'ITEM_RATE'],  # RATE1 first for exact match
                 'amount': ['AMOUNT', 'LINE_AMOUNT', 'LINE_TOTAL', 'ITEM_AMOUNT'],
-                'tax': ['TAX', 'TAXABLE', 'TAX_AMOUNT'],
+                'tax': ['TAX', 'TAXABLE', 'TAXABLE1', 'TAX_AMOUNT'],  # Added TAXABLE1
                 'unit': ['UNIT', 'UOM'],
                 'discount': ['DISCOUNT']
             }

@@ -213,26 +213,53 @@ function renderFields(extractedData, existingCorrections) {
         }
     }
 
-    // Render DocuWare Fields section (for DocuWare connector, this is the MAIN section)
-    // For other connectors, this is optional
-    if (extractedData.other_data && typeof extractedData.other_data === 'object') {
-        const otherDataFields = [];
-        for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
-            if (value !== null && value !== undefined) {
+    // Render DocuWare Fields section (ONLY for DocuWare connector or Local/None)
+    // For Google Drive, we don't show this section
+    if (connectorType === 'docuware' || showStandardGroups) {
+        if (extractedData.other_data && typeof extractedData.other_data === 'object') {
+            const otherDataFields = [];
+            for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
+                if (value !== null && value !== undefined) {
+                    const correction = existingCorrections[fieldName];
+                    otherDataFields.push({
+                        name: fieldName,
+                        data: { value: value, confidence: 0.85 },
+                        correction
+                    });
+                }
+            }
+
+            if (otherDataFields.length > 0) {
+                html += `<div class="field-group">`;
+                html += `<div class="field-group-title">DocuWare Fields</div>`;
+
+                for (const field of otherDataFields) {
+                    html += renderField(field.name, field.data, field.correction);
+                }
+
+                html += `</div>`;
+            }
+        }
+    }
+
+    // Render Google Drive folder fields section (ONLY for Google Drive connector)
+    if (connectorType === 'google_drive') {
+        const folderFields = ['level_1', 'level_2', 'level_3', 'filename'];
+        const googleDriveFields = [];
+
+        for (const fieldName of folderFields) {
+            if (extractedData.hasOwnProperty(fieldName)) {
+                const fieldData = extractedData[fieldName];
                 const correction = existingCorrections[fieldName];
-                otherDataFields.push({
-                    name: fieldName,
-                    data: { value: value, confidence: 0.85 },
-                    correction
-                });
+                googleDriveFields.push({ name: fieldName, data: fieldData, correction });
             }
         }
 
-        if (otherDataFields.length > 0) {
+        if (googleDriveFields.length > 0) {
             html += `<div class="field-group">`;
-            html += `<div class="field-group-title">DocuWare Fields</div>`;
+            html += `<div class="field-group-title">Google Drive Folder Structure</div>`;
 
-            for (const field of otherDataFields) {
+            for (const field of googleDriveFields) {
                 html += renderField(field.name, field.data, field.correction);
             }
 

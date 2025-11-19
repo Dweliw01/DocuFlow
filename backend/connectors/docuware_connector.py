@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import asyncio
 import logging
+import json
 sys.path.append(str(Path(__file__).parent.parent))
 
 from connectors.base_connector import BaseConnector
@@ -809,12 +810,15 @@ class DocuWareConnector(BaseConnector):
             for field_def in fields:
                 if field_def.get('DBFieldName') == table_field_name:
                     # Found our table field
+                    logger.debug(f"Found table field definition: {json.dumps(field_def, indent=2)}")
+
                     field_type = field_def.get('DWFieldType')
 
                     # Table fields have DWFieldType = 'Table'
                     if field_type == 'Table':
                         # Table field column definitions are in DBTableFields
                         table_columns_def = field_def.get('DBTableFields', [])
+                        logger.debug(f"DBTableFields content: {json.dumps(table_columns_def, indent=2)}")
 
                         for col_def in table_columns_def:
                             col_name = col_def.get('DBFieldName')

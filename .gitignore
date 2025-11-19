@@ -50,11 +50,25 @@ Thumbs.db
 .coverage
 htmlcov/
 backend/test_storage/
+test_storage/
 test_docuflow.db
+test_*.py
 .pytest/
+
+# Database files (contain secrets and local data)
+*.db
+*.db-shm
+*.db-wal
+*.db.backup_*
 
 # Logs
 *.log
 
 # Windows artifacts
 NUL
+
+# Backend storage (local uploads and processed files)
+backend/storage/uploads/*
+backend/storage/processed/*
+!backend/storage/uploads/.gitkeep
+!backend/storage/processed/.gitkeep

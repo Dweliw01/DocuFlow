@@ -235,11 +235,28 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     try:
+                        # Get active connector configuration to snapshot with document
+                        connector_type = None
+                        connector_config_snapshot = None
+
+                        cursor.execute('''
+                            SELECT config_encrypted, connector_type FROM organization_settings
+                            WHERE organization_id = ? AND is_active = 1
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        ''', (organization_id,))
+
+                        config_row = cursor.fetchone()
+                        if config_row:
+                            connector_type = config_row['connector_type']
+                            connector_config_snapshot = config_row['config_encrypted']  # Store full config as snapshot
+
                         cursor.execute('''
                             INSERT INTO document_metadata
                             (organization_id, batch_id, filename, file_path, category,
-                             extracted_data, status, confidence_score, connector_type, processed_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             extracted_data, status, confidence_score, connector_type,
+                             connector_config_snapshot, processed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             organization_id,
                             batch_id,
@@ -249,7 +266,8 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                             json.dumps(scored_data),  # Store as JSON string
                             'pending_review',  # Initial status
                             confidence_score,
-                            None,  # connector_type will be set on approval
+                            connector_type,  # Store connector type at processing time
+                            connector_config_snapshot,  # Store full config snapshot
                             datetime.utcnow()
                         ))
                         conn.commit()

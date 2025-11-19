@@ -222,30 +222,51 @@ async def get_document(
                 'created_at': corr['created_at']
             }
 
-        # Get connector configuration (for line items table columns)
-        # Always fetch the active connector config for the organization
+        # Get connector configuration from document's snapshot
+        # Use the config that was active when this document was processed,
+        # not the current active config (to preserve historical field display)
         connector_config = None
-        logger.info(f"[CONNECTOR-CONFIG] Org ID: {current_user['organization_id']}")
+        logger.info(f"[CONNECTOR-CONFIG] Loading config snapshot for document {doc_id}")
 
-        cursor.execute('''
-            SELECT config_encrypted, connector_type FROM organization_settings
-            WHERE organization_id = ? AND is_active = 1
-            ORDER BY updated_at DESC
-            LIMIT 1
-        ''', (current_user['organization_id'],))
-
-        config_row = cursor.fetchone()
-        logger.info(f"[CONNECTOR-CONFIG] Config row found: {config_row is not None}")
-
-        if config_row:
+        if doc['connector_config_snapshot']:
             try:
-                connector_config = json.loads(config_row['config_encrypted'])
-                logger.info(f"[CONNECTOR-CONFIG] Parsed config successfully, connector type: {config_row['connector_type']}")
+                connector_config = json.loads(doc['connector_config_snapshot'])
+                logger.info(f"[CONNECTOR-CONFIG] Using document's config snapshot, connector type: {doc['connector_type']}")
                 if 'docuware' in connector_config and 'selected_table_columns' in connector_config.get('docuware', {}):
                     logger.info(f"[CONNECTOR-CONFIG] Table columns: {list(connector_config['docuware']['selected_table_columns'].keys())}")
             except Exception as e:
-                logger.error(f"[CONNECTOR-CONFIG] Failed to parse config: {e}")
-                pass
+                logger.error(f"[CONNECTOR-CONFIG] Failed to parse config snapshot: {e}")
+                logger.info(f"[CONNECTOR-CONFIG] Falling back to current active config")
+                # Fallback to current active config if snapshot parsing fails
+                cursor.execute('''
+                    SELECT config_encrypted, connector_type FROM organization_settings
+                    WHERE organization_id = ? AND is_active = 1
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                ''', (current_user['organization_id'],))
+
+                config_row = cursor.fetchone()
+                if config_row:
+                    try:
+                        connector_config = json.loads(config_row['config_encrypted'])
+                    except:
+                        pass
+        else:
+            logger.info(f"[CONNECTOR-CONFIG] No snapshot found, using current active config")
+            # Document has no snapshot (processed before this feature), use current active config
+            cursor.execute('''
+                SELECT config_encrypted, connector_type FROM organization_settings
+                WHERE organization_id = ? AND is_active = 1
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ''', (current_user['organization_id'],))
+
+            config_row = cursor.fetchone()
+            if config_row:
+                try:
+                    connector_config = json.loads(config_row['config_encrypted'])
+                except:
+                    pass
 
         return {
             'id': doc['id'],

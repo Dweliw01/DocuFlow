@@ -228,7 +228,10 @@ async def get_document(
         connector_config = None
         logger.info(f"[CONNECTOR-CONFIG] Loading config snapshot for document {doc_id}")
 
-        if doc['connector_config_snapshot']:
+        # If document was processed without a connector, don't load any connector config
+        if not doc['connector_type'] or doc['connector_type'] == 'null':
+            logger.info(f"[CONNECTOR-CONFIG] Document processed without connector, no config to load")
+        elif doc['connector_config_snapshot']:
             try:
                 connector_config = json.loads(doc['connector_config_snapshot'])
                 logger.info(f"[CONNECTOR-CONFIG] Using document's config snapshot, connector type: {doc['connector_type']}")

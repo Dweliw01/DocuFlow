@@ -224,14 +224,14 @@ async def get_document(
 
         # Decrypt and parse connector config snapshot
         connector_config = None
-        if doc.get('connector_config_snapshot'):
-            try:
+        try:
+            if 'connector_config_snapshot' in doc.keys() and doc['connector_config_snapshot']:
                 from services.encryption_service import get_encryption_service
                 encryption_service = get_encryption_service()
                 decrypted_config = encryption_service.decrypt(doc['connector_config_snapshot'])
                 connector_config = json.loads(decrypted_config)
-            except Exception as e:
-                logger.warning(f"Failed to decrypt connector config for document {doc_id}: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to decrypt connector config for document {doc_id}: {e}")
 
         return {
             'id': doc['id'],

@@ -83,8 +83,17 @@ async function loadDocument() {
         // Load folder preview for Google Drive
         await loadFolderPreview();
 
-        // Load PDF
-        await loadPdf(currentDocument.id);
+        // Detect file type and load appropriate viewer
+        const fileExtension = currentDocument.filename.toLowerCase().split('.').pop();
+        const imageExtensions = ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'bmp', 'gif'];
+
+        if (imageExtensions.includes(fileExtension)) {
+            // Load image with OCR text overlay
+            await loadImage(currentDocument.id);
+        } else {
+            // Load PDF
+            await loadPdf(currentDocument.id);
+        }
 
     } catch (error) {
         console.error('Error loading document:', error);
@@ -676,6 +685,125 @@ async function loadPdf(documentId) {
     } catch (error) {
         console.error('Error loading PDF:', error);
         showToast('Failed to load PDF', 'error');
+    }
+}
+
+/**
+ * Load and render image with OCR text overlay
+ */
+async function loadImage(documentId) {
+    try {
+        const token = await getToken();
+        const imageUrl = `/api/documents/${documentId}/view`;
+
+        const canvas = document.getElementById('pdf-canvas');
+        const context = canvas.getContext('2d');
+        const textLayerDiv = document.getElementById('pdf-text-layer');
+
+        // Create and load image
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+
+            // Fetch image with auth token
+            fetch(imageUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                img.src = URL.createObjectURL(blob);
+            })
+            .catch(reject);
+        });
+
+        // Calculate scale to fit container
+        const pdfContainer = document.querySelector('.pdf-canvas-container');
+        const containerWidth = pdfContainer ? pdfContainer.clientWidth - 80 : 800;
+        const scale = containerWidth / img.width;
+
+        // Set canvas dimensions
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+
+        // Draw image on canvas
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Hide page navigation for single-page images
+        totalPages = 1;
+        document.getElementById('page-count').textContent = '1';
+        document.querySelector('.page-controls').style.display = 'none';
+
+        // Load and render OCR text overlay
+        await loadOcrTextOverlay(documentId, scale);
+
+        // Add text selection listener
+        addTextSelectionListener();
+
+    } catch (error) {
+        console.error('Error loading image:', error);
+        showToast('Failed to load image', 'error');
+    }
+}
+
+/**
+ * Load OCR coordinate data and create selectable text overlay
+ */
+async function loadOcrTextOverlay(documentId, scale) {
+    try {
+        const token = await getToken();
+        const ocrDataUrl = `/api/documents/${documentId}/ocr-data`;
+
+        const response = await fetch(ocrDataUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            // OCR data not available (e.g., for text-based PDFs)
+            console.log('OCR data not available for this document');
+            return;
+        }
+
+        const ocrData = await response.json();
+        const textLayerDiv = document.getElementById('pdf-text-layer');
+
+        if (!textLayerDiv || !ocrData.words || ocrData.words.length === 0) {
+            return;
+        }
+
+        // Clear existing text layer
+        textLayerDiv.innerHTML = '';
+
+        const canvas = document.getElementById('pdf-canvas');
+        textLayerDiv.style.width = canvas.width + 'px';
+        textLayerDiv.style.height = canvas.height + 'px';
+
+        // Create selectable text spans for each word
+        ocrData.words.forEach(word => {
+            const span = document.createElement('span');
+            span.textContent = word.text;
+            span.className = 'ocr-word';
+
+            // Position and size the span using scaled coordinates
+            span.style.position = 'absolute';
+            span.style.left = (word.x * scale) + 'px';
+            span.style.top = (word.y * scale) + 'px';
+            span.style.width = (word.width * scale) + 'px';
+            span.style.height = (word.height * scale) + 'px';
+            span.style.fontSize = (word.height * scale * 0.8) + 'px'; // Approximate font size
+            span.style.opacity = '0'; // Invisible but selectable
+            span.style.cursor = 'text';
+
+            textLayerDiv.appendChild(span);
+        });
+
+        console.log(`Loaded ${ocrData.words.length} OCR words for text selection`);
+
+    } catch (error) {
+        console.error('Error loading OCR overlay:', error);
+        // Non-fatal - image still viewable without text selection
     }
 }
 

@@ -141,12 +141,16 @@ async def upload_documents(
 
     # Save uploaded files
     file_paths = []
+    # Supported file types
+    ALLOWED_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp', '.gif'}
+
     for file in files:
         # Validate file extension
-        if not file.filename.endswith('.pdf'):
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        if file_ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid file type: {file.filename}. Only PDF files allowed."
+                detail=f"Invalid file type: {file.filename}. Allowed types: PDF, JPG, PNG, TIFF, BMP, GIF"
             )
 
         file_path = os.path.join(upload_folder, file.filename)
@@ -400,8 +404,33 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
         print(f"⚙️  Processing: {filename}")
         logger.info(f"Processing: {filename}")
 
-        # Step 1: OCR - Extract text from PDF
-        extracted_text = await ocr_service.extract_text_from_pdf(file_path)
+        # Step 1: Extract text from file (supports PDFs and images)
+        extraction_result = ocr_service.extract_text_from_file(file_path)
+        extracted_text = extraction_result.get('text', '')
+        extraction_method = extraction_result.get('method', 'unknown')
+        file_type = extraction_result.get('file_type', 'unknown')
+
+        logger.info(f"Text extraction: method={extraction_method}, file_type={file_type}, chars={len(extracted_text)}")
+
+        # Extract OCR coordinates for images and image-based PDFs
+        ocr_coordinates_path = None
+        if extraction_method in ['image_ocr', 'pdf_ocr']:
+            try:
+                logger.info(f"Extracting OCR coordinates for {filename}")
+                ocr_data = ocr_service.extract_text_with_coordinates(file_path)
+
+                # Save coordinates to JSON file
+                if ocr_data and ocr_data.get('words'):
+                    coords_filename = f"{os.path.splitext(filename)[0]}_ocr_coordinates.json"
+                    coords_dir = os.path.dirname(file_path)
+                    ocr_coordinates_path = os.path.join(coords_dir, coords_filename)
+
+                    with open(ocr_coordinates_path, 'w', encoding='utf-8') as f:
+                        json.dump(ocr_data, f, indent=2)
+
+                    logger.info(f"Saved OCR coordinates: {len(ocr_data['words'])} words -> {coords_filename}")
+            except Exception as e:
+                logger.warning(f"Failed to extract OCR coordinates for {filename}: {e}")
 
         # Validate OCR quality
         if not ocr_service.validate_ocr_quality(extracted_text):

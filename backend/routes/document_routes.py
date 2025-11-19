@@ -292,7 +292,7 @@ async def view_document(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    Serve PDF file for viewing in browser.
+    Serve document file (PDF or image) for viewing in browser.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -314,12 +314,82 @@ async def view_document(
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail='File not found on disk')
 
+        # Determine media type based on file extension
+        file_extension = os.path.splitext(file_path)[1].lower()
+        media_type_map = {
+            '.pdf': 'application/pdf',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.tiff': 'image/tiff',
+            '.tif': 'image/tiff',
+            '.bmp': 'image/bmp',
+            '.gif': 'image/gif'
+        }
+
+        media_type = media_type_map.get(file_extension, 'application/octet-stream')
+
         return FileResponse(
             file_path,
-            media_type='application/pdf',
+            media_type=media_type,
             filename=os.path.basename(file_path)
         )
 
+    finally:
+        conn.close()
+
+
+@router.get("/{doc_id}/ocr-data")
+async def get_ocr_data(
+    doc_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get OCR coordinate data for a document (if available).
+    Returns bounding box coordinates for words extracted via OCR.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Get document file path
+        cursor.execute('''
+            SELECT file_path FROM document_metadata
+            WHERE id = ? AND organization_id = ?
+        ''', (doc_id, current_user['organization_id']))
+
+        doc = cursor.fetchone()
+
+        if not doc:
+            raise HTTPException(status_code=404, detail='Document not found')
+
+        file_path = doc['file_path']
+
+        # Calculate OCR coordinates file path
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        coords_filename = f"{base_name}_ocr_coordinates.json"
+        coords_path = os.path.join(os.path.dirname(file_path), coords_filename)
+
+        # Check if OCR coordinates file exists
+        if not os.path.exists(coords_path):
+            raise HTTPException(
+                status_code=404,
+                detail='OCR coordinate data not available for this document'
+            )
+
+        # Read and return the JSON data
+        with open(coords_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+
+        logger.info(f"Serving OCR data for document {doc_id}: {len(ocr_data.get('words', []))} words")
+
+        return ocr_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading OCR data for document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=f'Error loading OCR data: {str(e)}')
     finally:
         conn.close()
 

@@ -549,9 +549,10 @@ function displayIndexFields(fields) {
                 ${availableFields.map(field => {
                     if (field.is_table_field && field.table_columns) {
                         // Display table field with nested columns
+                        const tableFieldLabel = field.label || field.name;
                         return `
                             <tr class="table-field-row">
-                                <td><strong>${field.name}</strong> <span class="table-indicator">📋 Table Field</span></td>
+                                <td><strong>${tableFieldLabel}</strong> <span class="table-indicator">📋 Table Field</span></td>
                                 <td><span class="field-type">${field.type}</span></td>
                                 <td class="${field.required ? 'field-required' : 'field-optional'}">
                                     ${field.required ? '✓ Yes' : 'No'}
@@ -665,6 +666,7 @@ function buildFieldSelection(docuwareFields) {
                     <p class="field-group-description">These fields are required by DocuWare and should be extracted from documents</p>
                     <div class="field-checkboxes">
                         ${requiredFields.map(field => {
+                            const fieldLabel = field.label || field.name;
                             return `
                             <label class="field-checkbox">
                                 <input
@@ -673,7 +675,7 @@ function buildFieldSelection(docuwareFields) {
                                     data-field-name="${field.name}"
                                     data-required="true"
                                 >
-                                <span class="field-name">${field.name}</span>
+                                <span class="field-name">${fieldLabel}</span>
                                 <span class="field-badge field-badge-required">Required</span>
                             </label>
                         `}).join('')}
@@ -687,6 +689,7 @@ function buildFieldSelection(docuwareFields) {
                     <p class="field-group-description">Select which optional fields AI should try to extract</p>
                     <div class="field-checkboxes">
                         ${optionalFields.map(field => {
+                            const fieldLabel = field.label || field.name;
                             return `
                             <label class="field-checkbox">
                                 <input
@@ -695,7 +698,7 @@ function buildFieldSelection(docuwareFields) {
                                     data-field-name="${field.name}"
                                     data-required="false"
                                 >
-                                <span class="field-name">${field.name}</span>
+                                <span class="field-name">${fieldLabel}</span>
                             </label>
                         `}).join('')}
                     </div>

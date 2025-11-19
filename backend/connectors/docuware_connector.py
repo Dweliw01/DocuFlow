@@ -590,6 +590,7 @@ class DocuWareConnector(BaseConnector):
 
                     fields.append(IndexField(
                         name=field_name,
+                        label=field_label,  # Display name for frontend
                         type=mapped_type,
                         required=field_required,
                         max_length=field_length,
@@ -715,6 +716,7 @@ class DocuWareConnector(BaseConnector):
 
                     fields.append(IndexField(
                         name=field_name,
+                        label=field_label,  # Display name for frontend
                         type=item_element_name,
                         required=False,  # Default to optional - DocuWare API doesn't expose required field info
                         max_length=None,

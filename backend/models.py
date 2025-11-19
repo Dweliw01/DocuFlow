@@ -391,7 +391,8 @@ class IndexField(BaseModel):
     """
     Document index field in DocuWare (metadata field).
     """
-    name: str
+    name: str  # DB field name (e.g., INVOICE_NUMBER)
+    label: Optional[str] = None  # Display label (e.g., "Invoice Number")
     type: str  # Text, Date, Decimal, Integer, Table, etc.
     required: bool
     max_length: Optional[int] = None

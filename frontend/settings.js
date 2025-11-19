@@ -412,10 +412,130 @@ async function getFieldSuggestions(fields) {
     }
 }
 
+/**
+ * Get available fields based on connector type
+ */
+function getAvailableFieldsForConnector(connectorType, allFields) {
+    switch(connectorType) {
+        case 'none':
+        case 'local':
+            // Local/No connector - show all possible fields
+            return allFields;
+
+        case 'docuware':
+            // DocuWare - show only fields selected from DocuWare configuration
+            // These are the fields user already selected in DocuWare setup
+            // Includes both regular fields and table fields
+            return allFields; // Already filtered by DocuWare API
+
+        case 'google_drive':
+            // Google Drive - show folder hierarchy fields (Level 1/2/3)
+            return [
+                {
+                    name: 'level_1',
+                    label: 'Folder Level 1 (Top Category)',
+                    type: 'string',
+                    required: true,
+                    max_length: 255,
+                    description: 'Top-level folder (e.g., "Invoices", "Purchase Orders")'
+                },
+                {
+                    name: 'level_2',
+                    label: 'Folder Level 2 (Subcategory)',
+                    type: 'string',
+                    required: false,
+                    max_length: 255,
+                    description: 'Second-level folder (e.g., Vendor name, Department)'
+                },
+                {
+                    name: 'level_3',
+                    label: 'Folder Level 3 (Detail)',
+                    type: 'string',
+                    required: false,
+                    max_length: 255,
+                    description: 'Third-level folder (e.g., Date, Project)'
+                },
+                {
+                    name: 'filename',
+                    label: 'File Name',
+                    type: 'string',
+                    required: true,
+                    max_length: 255,
+                    description: 'Name of the file to save in Google Drive'
+                }
+            ];
+
+        default:
+            return allFields;
+    }
+}
+
+/**
+ * Get context message for connector type
+ */
+function getConnectorContextMessage(connectorType) {
+    switch(connectorType) {
+        case 'none':
+        case 'local':
+            return {
+                icon: '💾',
+                title: 'Local Storage - All Fields Available',
+                description: 'Showing all available fields for maximum flexibility with local file organization.'
+            };
+
+        case 'docuware':
+            return {
+                icon: '📊',
+                title: 'DocuWare Fields',
+                description: 'Showing only the fields you selected in your DocuWare configuration, including table fields for line items.'
+            };
+
+        case 'google_drive':
+            return {
+                icon: '☁️',
+                title: 'Google Drive Folder Structure',
+                description: 'Map fields to folder levels to automatically organize documents in your Drive hierarchy.'
+            };
+
+        default:
+            return null;
+    }
+}
+
 function displayIndexFields(fields) {
     const container = document.getElementById('fields-table-container');
 
+    // Get connector-specific fields
+    const availableFields = getAvailableFieldsForConnector(state.connectorType, fields);
+    const contextInfo = getConnectorContextMessage(state.connectorType);
+
+    // Build context banner
+    const contextBanner = contextInfo ? `
+        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+                    border: 2px solid #3b82f6;
+                    border-radius: 8px;
+                    padding: 1rem 1.5rem;
+                    margin-bottom: 1.5rem;
+                    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">${contextInfo.icon}</span>
+                <div>
+                    <div style="font-weight: 600; color: #1e40af; font-size: 1rem; margin-bottom: 0.25rem;">
+                        ${contextInfo.title}
+                    </div>
+                    <div style="color: #3730a3; font-size: 0.875rem;">
+                        ${contextInfo.description}
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #93c5fd; color: #1e40af; font-size: 0.875rem;">
+                <strong>Showing ${availableFields.length} field${availableFields.length !== 1 ? 's' : ''}</strong>
+            </div>
+        </div>
+    ` : '';
+
     const table = `
+        ${contextBanner}
         <table class="fields-table">
             <thead>
                 <tr>
@@ -426,7 +546,7 @@ function displayIndexFields(fields) {
                 </tr>
             </thead>
             <tbody>
-                ${fields.map(field => {
+                ${availableFields.map(field => {
                     if (field.is_table_field && field.table_columns) {
                         // Display table field with nested columns
                         return `
@@ -451,9 +571,11 @@ function displayIndexFields(fields) {
                         `;
                     } else {
                         // Regular field
+                        const displayName = field.label || field.name;
+                        const description = field.description ? `<br><span style="font-size: 0.875rem; color: #6b7280; font-weight: normal;">${field.description}</span>` : '';
                         return `
                             <tr>
-                                <td><strong>${field.name}</strong></td>
+                                <td><strong>${displayName}</strong>${description}</td>
                                 <td><span class="field-type">${field.type}</span></td>
                                 <td class="${field.required ? 'field-required' : 'field-optional'}">
                                     ${field.required ? '✓ Yes' : 'No'}
@@ -477,8 +599,12 @@ function displayIndexFields(fields) {
 function buildFieldSelection(docuwareFields) {
     const container = document.getElementById('field-mapping-container');
 
+    // Get connector-specific fields
+    const availableFields = getAvailableFieldsForConnector(state.connectorType, docuwareFields);
+    const contextInfo = getConnectorContextMessage(state.connectorType);
+
     // Filter out system fields and separate table fields from regular fields
-    const userFields = docuwareFields.filter(field => !field.is_system_field);
+    const userFields = availableFields.filter(field => !field.is_system_field);
     const regularFields = userFields.filter(field => !field.is_table_field);
     const tableFields = userFields.filter(field => field.is_table_field);
 
@@ -505,7 +631,30 @@ function buildFieldSelection(docuwareFields) {
         return Object.values(state.fieldSuggestions).includes(fieldName);
     };
 
+    // Build context banner
+    const contextBanner = contextInfo ? `
+        <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+                    border: 2px solid #3b82f6;
+                    border-radius: 8px;
+                    padding: 1rem 1.5rem;
+                    margin-bottom: 1.5rem;
+                    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span style="font-size: 1.5rem;">${contextInfo.icon}</span>
+                <div>
+                    <div style="font-weight: 600; color: #1e40af; font-size: 1rem; margin-bottom: 0.25rem;">
+                        ${contextInfo.title}
+                    </div>
+                    <div style="color: #3730a3; font-size: 0.875rem;">
+                        ${contextInfo.description}
+                    </div>
+                </div>
+            </div>
+        </div>
+    ` : '';
+
     const selectionHtml = `
+        ${contextBanner}
         <div class="field-selection-container">
             ${requiredFields.length > 0 ? `
                 <div class="field-group">

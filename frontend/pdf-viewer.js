@@ -203,15 +203,11 @@ function renderFields(extractedData, existingCorrections) {
         }
     }
 
-    // Render fields from other_data
+    // Render DocuWare Fields section (for DocuWare connector, this is the MAIN section)
+    // For other connectors, this is optional
     if (extractedData.other_data && typeof extractedData.other_data === 'object') {
         const otherDataFields = [];
         for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
-            // Skip if field is not in allowed list (when connector has restrictions)
-            if (allowedFields && !allowedFields.includes(fieldName)) {
-                continue;
-            }
-
             if (value !== null && value !== undefined) {
                 const correction = existingCorrections[fieldName];
                 otherDataFields.push({
@@ -234,33 +230,30 @@ function renderFields(extractedData, existingCorrections) {
         }
     }
 
-    // Render additional fields not in any group
-    const knownFields = Object.values(fieldGroups).flat();
-    const additionalFields = [];
+    // Render additional fields (only for Local/None connector)
+    if (showStandardGroups) {
+        const knownFields = Object.values(fieldGroups).flat();
+        const additionalFields = [];
 
-    for (const [fieldName, fieldData] of Object.entries(extractedData)) {
-        // Skip if field is not in allowed list (when connector has restrictions)
-        if (allowedFields && !allowedFields.includes(fieldName)) {
-            continue;
+        for (const [fieldName, fieldData] of Object.entries(extractedData)) {
+            if (!knownFields.includes(fieldName) &&
+                fieldName !== 'line_items' &&
+                fieldName !== 'other_data') {
+                const correction = existingCorrections[fieldName];
+                additionalFields.push({ name: fieldName, data: fieldData, correction });
+            }
         }
 
-        if (!knownFields.includes(fieldName) &&
-            fieldName !== 'line_items' &&
-            fieldName !== 'other_data') {
-            const correction = existingCorrections[fieldName];
-            additionalFields.push({ name: fieldName, data: fieldData, correction });
+        if (additionalFields.length > 0) {
+            html += `<div class="field-group">`;
+            html += `<div class="field-group-title">Additional Fields</div>`;
+
+            for (const field of additionalFields) {
+                html += renderField(field.name, field.data, field.correction);
+            }
+
+            html += `</div>`;
         }
-    }
-
-    if (additionalFields.length > 0) {
-        html += `<div class="field-group">`;
-        html += `<div class="field-group-title">Additional Fields</div>`;
-
-        for (const field of additionalFields) {
-            html += renderField(field.name, field.data, field.correction);
-        }
-
-        html += `</div>`;
     }
 
     // Render line items table

@@ -232,41 +232,55 @@ async def get_document(
             try:
                 connector_config = json.loads(doc['connector_config_snapshot'])
                 logger.info(f"[CONNECTOR-CONFIG] Using document's config snapshot, connector type: {doc['connector_type']}")
-                if 'docuware' in connector_config and 'selected_table_columns' in connector_config.get('docuware', {}):
-                    logger.info(f"[CONNECTOR-CONFIG] Table columns: {list(connector_config['docuware']['selected_table_columns'].keys())}")
+
+                # Only log DocuWare-specific fields if this is a DocuWare document
+                if doc['connector_type'] == 'docuware':
+                    if connector_config and 'docuware' in connector_config:
+                        docuware_config = connector_config.get('docuware')
+                        if docuware_config and isinstance(docuware_config, dict) and 'selected_table_columns' in docuware_config:
+                            logger.info(f"[CONNECTOR-CONFIG] Table columns: {list(docuware_config['selected_table_columns'].keys())}")
             except Exception as e:
                 logger.error(f"[CONNECTOR-CONFIG] Failed to parse config snapshot: {e}")
-                logger.info(f"[CONNECTOR-CONFIG] Falling back to current active config")
-                # Fallback to current active config if snapshot parsing fails
+                logger.info(f"[CONNECTOR-CONFIG] Will attempt to load matching connector config")
+                # Only fallback if we can find a config that matches this document's connector type
                 cursor.execute('''
                     SELECT config_encrypted, connector_type FROM organization_settings
-                    WHERE organization_id = ? AND is_active = 1
+                    WHERE organization_id = ? AND connector_type = ?
                     ORDER BY updated_at DESC
                     LIMIT 1
-                ''', (current_user['organization_id'],))
+                ''', (current_user['organization_id'], doc['connector_type']))
 
                 config_row = cursor.fetchone()
                 if config_row:
                     try:
                         connector_config = json.loads(config_row['config_encrypted'])
+                        logger.info(f"[CONNECTOR-CONFIG] Loaded matching {doc['connector_type']} config")
                     except:
+                        logger.warning(f"[CONNECTOR-CONFIG] Failed to parse fallback config")
                         pass
+                else:
+                    logger.warning(f"[CONNECTOR-CONFIG] No matching {doc['connector_type']} config found, fields may not display correctly")
         else:
-            logger.info(f"[CONNECTOR-CONFIG] No snapshot found, using current active config")
-            # Document has no snapshot (processed before this feature), use current active config
+            logger.info(f"[CONNECTOR-CONFIG] No snapshot found, loading config matching connector type: {doc['connector_type']}")
+            # Document has no snapshot (processed before this feature)
+            # Load a config that matches this document's connector type
             cursor.execute('''
                 SELECT config_encrypted, connector_type FROM organization_settings
-                WHERE organization_id = ? AND is_active = 1
+                WHERE organization_id = ? AND connector_type = ?
                 ORDER BY updated_at DESC
                 LIMIT 1
-            ''', (current_user['organization_id'],))
+            ''', (current_user['organization_id'], doc['connector_type']))
 
             config_row = cursor.fetchone()
             if config_row:
                 try:
                     connector_config = json.loads(config_row['config_encrypted'])
+                    logger.info(f"[CONNECTOR-CONFIG] Loaded matching {doc['connector_type']} config")
                 except:
+                    logger.warning(f"[CONNECTOR-CONFIG] Failed to parse config")
                     pass
+            else:
+                logger.warning(f"[CONNECTOR-CONFIG] No {doc['connector_type']} config found for document")
 
         return {
             'id': doc['id'],

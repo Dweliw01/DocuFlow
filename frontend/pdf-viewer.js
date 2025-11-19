@@ -159,10 +159,18 @@ function getAllowedFields() {
 function renderFields(extractedData, existingCorrections) {
     const container = document.getElementById('fields-content');
 
+    // Get connector type to determine which sections to show
+    const connectorType = connectorConfig ? connectorConfig.connector_type : 'none';
+
+    // For DocuWare: ONLY show "DocuWare Fields" section + Line Items
+    // For Google Drive: ONLY show folder level fields
+    // For Local/None: Show all standard field groups
+    const showStandardGroups = (connectorType === 'none' || connectorType === 'local' || !connectorType);
+
     // Get allowed fields based on connector configuration
     const allowedFields = getAllowedFields();
 
-    // Define field groups
+    // Define field groups (only rendered for Local/None connector)
     const fieldGroups = {
         'Financial': ['amount', 'total', 'subtotal', 'tax', 'balance'],
         'Dates': ['date', 'due_date', 'invoice_date', 'order_date'],
@@ -173,8 +181,9 @@ function renderFields(extractedData, existingCorrections) {
 
     let html = '';
 
-    // Render each group
-    for (const [groupName, fieldList] of Object.entries(fieldGroups)) {
+    // Render standard field groups (only for Local/None connector)
+    if (showStandardGroups) {
+        for (const [groupName, fieldList] of Object.entries(fieldGroups)) {
         const groupFields = [];
 
         for (const fieldName of fieldList) {
@@ -190,16 +199,17 @@ function renderFields(extractedData, existingCorrections) {
             }
         }
 
-        // Only render group if it has fields
-        if (groupFields.length > 0) {
-            html += `<div class="field-group">`;
-            html += `<div class="field-group-title">${groupName}</div>`;
+            // Only render group if it has fields
+            if (groupFields.length > 0) {
+                html += `<div class="field-group">`;
+                html += `<div class="field-group-title">${groupName}</div>`;
 
-            for (const field of groupFields) {
-                html += renderField(field.name, field.data, field.correction);
+                for (const field of groupFields) {
+                    html += renderField(field.name, field.data, field.correction);
+                }
+
+                html += `</div>`;
             }
-
-            html += `</div>`;
         }
     }
 

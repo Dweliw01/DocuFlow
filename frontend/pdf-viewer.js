@@ -244,10 +244,40 @@ function renderFields(extractedData, existingCorrections) {
 
     // Render Google Drive folder fields section (ONLY for Google Drive connector)
     if (connectorType === 'google_drive') {
-        const folderFields = ['level_1', 'level_2', 'level_3', 'filename'];
         const googleDriveFields = [];
 
-        for (const fieldName of folderFields) {
+        // Get Google Drive configuration to know which fields are mapped to folder levels
+        const gdConfig = connectorConfig?.google_drive || {};
+        const primaryLevel = gdConfig.primary_level || 'category';
+        const secondaryLevel = gdConfig.secondary_level || 'vendor';
+        const tertiaryLevel = gdConfig.tertiary_level || 'none';
+
+        // Map level types to actual field names
+        const levelToFieldMap = {
+            'category': 'category',
+            'vendor': 'vendor',
+            'client': 'client',
+            'company': 'company',
+            'year': 'date',
+            'year_month': 'date',
+            'document_type': 'document_type',
+            'person_name': 'person_name'
+        };
+
+        // Collect fields that are used in the folder structure
+        const fieldsToShow = new Set();
+
+        [primaryLevel, secondaryLevel, tertiaryLevel].forEach(levelType => {
+            if (levelType && levelType !== 'none') {
+                const fieldName = levelToFieldMap[levelType];
+                if (fieldName) {
+                    fieldsToShow.add(fieldName);
+                }
+            }
+        });
+
+        // Add the fields to display
+        for (const fieldName of fieldsToShow) {
             if (extractedData.hasOwnProperty(fieldName)) {
                 const fieldData = extractedData[fieldName];
                 const correction = existingCorrections[fieldName];
@@ -257,7 +287,7 @@ function renderFields(extractedData, existingCorrections) {
 
         if (googleDriveFields.length > 0) {
             html += `<div class="field-group">`;
-            html += `<div class="field-group-title">Google Drive Folder Structure</div>`;
+            html += `<div class="field-group-title">Google Drive Folder Index Fields</div>`;
 
             for (const field of googleDriveFields) {
                 html += renderField(field.name, field.data, field.correction);
@@ -293,8 +323,8 @@ function renderFields(extractedData, existingCorrections) {
         }
     }
 
-    // Render line items table
-    if (extractedData.line_items && Array.isArray(extractedData.line_items) && extractedData.line_items.length > 0) {
+    // Render line items table (not for Google Drive connector)
+    if (connectorType !== 'google_drive' && extractedData.line_items && Array.isArray(extractedData.line_items) && extractedData.line_items.length > 0) {
         html += `<div class="field-group">`;
         html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">`;
         html += `<div class="field-group-title" style="margin-bottom: 0;">Line Items (${extractedData.line_items.length})</div>`;

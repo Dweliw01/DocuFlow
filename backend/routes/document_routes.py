@@ -277,6 +277,71 @@ async def view_document(
         conn.close()
 
 
+@router.get("/{doc_id}/ocr-data")
+async def get_ocr_coordinates(
+    doc_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get OCR text coordinates for image or image-based PDF documents.
+    Returns word-level bounding boxes for creating selectable text overlay.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT file_path FROM document_metadata
+            WHERE id = ? AND organization_id = ?
+        ''', (doc_id, current_user['organization_id']))
+
+        doc = cursor.fetchone()
+
+        if not doc:
+            raise HTTPException(status_code=404, detail='Document not found')
+
+        file_path = doc['file_path']
+
+        # Derive OCR coordinates file path
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        coords_dir = os.path.dirname(file_path)
+        coords_filename = f"{base_name}_ocr_coordinates.json"
+        coords_path = os.path.join(coords_dir, coords_filename)
+
+        # Check if OCR coordinates file exists
+        if not os.path.exists(coords_path):
+            # Return empty data if no OCR coordinates (e.g., text-based PDF)
+            return {
+                'words': [],
+                'image_width': 0,
+                'image_height': 0,
+                'has_ocr_data': False
+            }
+
+        # Load and return OCR coordinates
+        with open(coords_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+            ocr_data['has_ocr_data'] = True
+            return ocr_data
+
+    except FileNotFoundError:
+        # Return empty data if file not found
+        return {
+            'words': [],
+            'image_width': 0,
+            'image_height': 0,
+            'has_ocr_data': False
+        }
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON in OCR coordinates file for document {doc_id}")
+        raise HTTPException(status_code=500, detail='Invalid OCR data format')
+    except Exception as e:
+        logger.error(f"Error loading OCR coordinates for document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail='Failed to load OCR data')
+    finally:
+        conn.close()
+
+
 @router.post("/{doc_id}/correct-field")
 async def correct_field(
     doc_id: int,

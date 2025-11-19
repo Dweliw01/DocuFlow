@@ -222,6 +222,17 @@ async def get_document(
                 'created_at': corr['created_at']
             }
 
+        # Decrypt and parse connector config snapshot
+        connector_config = None
+        if doc.get('connector_config_snapshot'):
+            try:
+                from services.encryption_service import get_encryption_service
+                encryption_service = get_encryption_service()
+                decrypted_config = encryption_service.decrypt(doc['connector_config_snapshot'])
+                connector_config = json.loads(decrypted_config)
+            except Exception as e:
+                logger.warning(f"Failed to decrypt connector config for document {doc_id}: {e}")
+
         return {
             'id': doc['id'],
             'filename': doc['filename'],
@@ -232,7 +243,8 @@ async def get_document(
             'extracted_data': extracted_data,
             'corrections': corrections_dict,
             'created_at': doc['created_at'],
-            'connector_type': doc['connector_type']
+            'connector_type': doc['connector_type'],
+            'connector_config': connector_config  # Full config for field filtering
         }
 
     finally:

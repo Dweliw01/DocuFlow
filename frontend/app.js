@@ -473,9 +473,19 @@ function renderDocumentCard(doc, docId) {
                     </span>
                     <span class="doc-filename">${doc.filename}</span>
                 </div>
-                <span class="confidence-badge ${getConfidenceClass(doc.confidence)}">
-                    ${(doc.confidence * 100).toFixed(0)}%
-                </span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="confidence-badge ${getConfidenceClass(doc.confidence)}">
+                        ${(doc.confidence * 100).toFixed(0)}%
+                    </span>
+                    ${doc.id ? `
+                        <button class="btn-review" onclick="event.stopPropagation(); reviewDocument(${doc.id})" title="Review & Edit Document">
+                            <i class="fa-solid fa-file-pen"></i> Review
+                        </button>
+                        <button class="btn-delete-doc" onclick="event.stopPropagation(); deleteDocument(${doc.id}, '${doc.filename}')" title="Delete Document">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    ` : ''}
+                </div>
             </div>
             ${hasData ? renderExtractedDataCard(doc, docId) : ''}
         </div>

@@ -283,6 +283,7 @@ class DocumentResult(BaseModel):
     processed_path: Optional[str] = None
     extracted_text_preview: str  # First 500 chars of extracted text
     extracted_data: Optional[ExtractedData] = None  # Structured data extracted from document
+    connector_type: Optional[str] = None  # Which connector this document was processed with
     error: Optional[str] = None
     processing_time: float  # seconds
     upload_result: Optional['UploadResult'] = None  # Result of connector upload (if configured)

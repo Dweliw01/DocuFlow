@@ -219,6 +219,7 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                     confidence=0.0,
                     extracted_text_preview="",
                     extracted_data=None,
+                    connector_type=None,  # Failed before connector determination
                     error=str(e),
                     processing_time=0.0
                 )
@@ -254,6 +255,9 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                         if config_row:
                             connector_type = config_row['connector_type']
                             connector_config_snapshot = config_row['config_encrypted']  # Store full config as snapshot
+
+                        # Set connector_type on the result so it's available in Recent Activity
+                        result.connector_type = connector_type
 
                         cursor.execute('''
                             INSERT INTO document_metadata

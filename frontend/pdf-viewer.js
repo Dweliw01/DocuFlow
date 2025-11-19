@@ -140,20 +140,41 @@ function getAllowedFields() {
         // Get fields that were selected in DocuWare configuration
         const allowedFields = new Set();
 
-        // Add regular fields from field_mapping
-        if (connectorConfig.docuware && connectorConfig.docuware.field_mapping) {
-            Object.keys(connectorConfig.docuware.field_mapping).forEach(field => {
-                allowedFields.add(field);
+        // Add fields from selected_fields (convert DocuWare names to AI field names)
+        if (connectorConfig.docuware && connectorConfig.docuware.selected_fields) {
+            connectorConfig.docuware.selected_fields.forEach(dwField => {
+                // Convert DocuWare field name (e.g. "VENDOR", "INVOICE_NUMBER")
+                // to AI extracted field name (e.g. "vendor", "invoice_number")
+                const aiField = dwField.toLowerCase().replace(/_/g, '_');
+
+                // Common mappings between DocuWare and AI field names
+                const fieldMappings = {
+                    'document_type': ['document_type', 'type'],
+                    'vendor': ['vendor', 'supplier'],
+                    'invoice_number': ['invoice_number', 'document_number'],
+                    'customer_po': ['customer_po', 'po_number'],
+                    'email': ['email'],
+                    'date': ['date', 'invoice_date'],
+                    'due_date': ['due_date'],
+                    'total_amount': ['total', 'amount', 'total_amount']
+                };
+
+                // Add the normalized field
+                allowedFields.add(aiField);
+
+                // Also add any known aliases
+                if (fieldMappings[aiField]) {
+                    fieldMappings[aiField].forEach(alias => allowedFields.add(alias));
+                }
             });
         }
 
         // Add table fields
         if (connectorConfig.docuware && connectorConfig.docuware.selected_table_columns) {
-            // Table fields are always shown if configured
             allowedFields.add('line_items');
         }
 
-        return Array.from(allowedFields);
+        return allowedFields.size > 0 ? Array.from(allowedFields) : null;
     }
 
     if (connectorType === 'google_drive') {

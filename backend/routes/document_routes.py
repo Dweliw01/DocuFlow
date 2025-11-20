@@ -782,3 +782,66 @@ async def dismiss_document(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+
+@router.get("/{doc_id}/ocr-coordinates")
+async def get_ocr_coordinates(doc_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Get OCR coordinates for a document (if available).
+    Returns word-level coordinates for text overlay rendering.
+
+    This endpoint is used by the PDF viewer to enable text selection
+    on image-based/scanned documents.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Get document metadata
+        cursor.execute('''
+            SELECT file_path, organization_id
+            FROM document_metadata
+            WHERE id = ?
+        ''', (doc_id,))
+
+        doc = cursor.fetchone()
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Verify user has access to this document
+        if doc['organization_id'] != current_user['organization_id']:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Build OCR coordinates file path
+        file_path = doc['file_path']
+        file_dir = os.path.dirname(file_path)
+        file_basename = os.path.splitext(os.path.basename(file_path))[0]
+        ocr_coords_path = os.path.join(file_dir, f"{file_basename}_ocr_coordinates.json")
+
+        # Check if OCR coordinates file exists
+        if not os.path.exists(ocr_coords_path):
+            # No OCR coordinates available (native PDF or old document)
+            return {
+                'available': False,
+                'message': 'OCR coordinates not available for this document'
+            }
+
+        # Read and return OCR coordinates
+        with open(ocr_coords_path, 'r', encoding='utf-8') as f:
+            ocr_data = json.load(f)
+
+        logger.info(f"Served OCR coordinates for document {doc_id}: {len(ocr_data.get('words', []))} words")
+
+        return {
+            'available': True,
+            'data': ocr_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get OCR coordinates for document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()

@@ -12,6 +12,7 @@ let corrections = {};
 let currentEditingField = null;
 let highlightMode = false;
 let highlightTargetField = null;
+let ocrCoordinates = null; // OCR text coordinates for overlay (if available)
 
 // PDF.js configuration
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -486,6 +487,9 @@ async function loadPdf(documentId) {
         // Update page count
         document.getElementById('page-count').textContent = totalPages;
 
+        // Load OCR coordinates (if available) for text overlay
+        ocrCoordinates = await loadOCRCoordinates();
+
         // Enable navigation buttons
         updatePageButtons();
 
@@ -531,38 +535,53 @@ async function renderPage(pageNum) {
         await page.render(renderContext).promise;
 
         // Render text layer for selection (if element exists)
+        let textLayerRendered = false;
         if (textLayerDiv) {
             try {
                 // Set text layer dimensions
                 textLayerDiv.style.width = canvas.width + 'px';
                 textLayerDiv.style.height = canvas.height + 'px';
 
-                // Get text content
+                // Get text content from PDF.js (for native PDFs)
                 const textContent = await page.getTextContent();
-                textLayerDiv.innerHTML = ''; // Clear previous text
 
-                // Render text items
-                textContent.items.forEach(item => {
-                    const textDiv = document.createElement('span');
-                    textDiv.textContent = item.str;
+                // Check if PDF has native text (not scanned/image-only)
+                if (textContent && textContent.items && textContent.items.length > 0) {
+                    textLayerDiv.innerHTML = ''; // Clear previous text
 
-                    // Calculate position and size
-                    const tx = pdfjsLib.Util.transform(
-                        scaledViewport.transform,
-                        item.transform
-                    );
+                    // Render text items from PDF.js
+                    textContent.items.forEach(item => {
+                        const textDiv = document.createElement('span');
+                        textDiv.textContent = item.str;
 
-                    textDiv.style.left = tx[4] + 'px';
-                    textDiv.style.top = (tx[5] - item.height) + 'px';
-                    textDiv.style.fontSize = (item.height * scale) + 'px';
-                    textDiv.style.fontFamily = item.fontName;
+                        // Calculate position and size
+                        const tx = pdfjsLib.Util.transform(
+                            scaledViewport.transform,
+                            item.transform
+                        );
 
-                    textLayerDiv.appendChild(textDiv);
-                });
+                        textDiv.style.left = tx[4] + 'px';
+                        textDiv.style.top = (tx[5] - item.height) + 'px';
+                        textDiv.style.fontSize = (item.height * scale) + 'px';
+                        textDiv.style.fontFamily = item.fontName;
+
+                        textLayerDiv.appendChild(textDiv);
+                    });
+
+                    textLayerRendered = true;
+                    console.log('Native PDF text layer rendered');
+                } else {
+                    console.log('No native text found in PDF, will try OCR overlay');
+                }
             } catch (textError) {
-                console.warn('Could not render text layer:', textError);
-                // Continue without text selection
+                console.warn('Could not render native text layer:', textError);
             }
+        }
+
+        // If native text layer failed or unavailable, try OCR overlay
+        if (!textLayerRendered && ocrCoordinates) {
+            console.log('Rendering OCR text overlay...');
+            await renderOCRTextLayer(page, scale, scaledViewport);
         }
 
         // Update current page
@@ -1126,4 +1145,120 @@ async function refreshFolderPreview() {
     window.folderPreviewTimeout = setTimeout(() => {
         loadFolderPreview();
     }, 500); // Wait 500ms after last field change
+}
+
+// ============================================================================
+// OCR Text Overlay System
+// Enables text selection on scanned/image-based PDFs
+// ============================================================================
+
+/**
+ * Load OCR coordinates for the current document
+ * Called when document loads - coordinates enable text selection on scanned docs
+ */
+async function loadOCRCoordinates() {
+    try {
+        const token = await getToken();
+        const response = await fetch(`/api/documents/${docId}/ocr-coordinates`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            console.log('OCR coordinates not available for this document');
+            return null;
+        }
+
+        const result = await response.json();
+
+        if (result.available) {
+            console.log(`OCR overlay enabled: ${result.data.words?.length || 0} words available`);
+            return result.data;
+        } else {
+            console.log(result.message);
+            return null;
+        }
+
+    } catch (error) {
+        console.warn('Failed to load OCR coordinates:', error);
+        return null;
+    }
+}
+
+/**
+ * Render OCR text overlay on the PDF page
+ * Creates selectable text layer from OCR coordinates
+ *
+ * @param {Object} page - PDF.js page object
+ * @param {number} scale - Current page scale
+ * @param {Object} viewport - PDF.js viewport object
+ */
+async function renderOCRTextLayer(page, scale, viewport) {
+    if (!ocrCoordinates || !ocrCoordinates.words) {
+        console.log('No OCR coordinates available for overlay');
+        return;
+    }
+
+    const textLayerDiv = document.getElementById('pdf-text-layer');
+    if (!textLayerDiv) {
+        console.warn('Text layer div not found');
+        return;
+    }
+
+    try {
+        // Clear any existing text layer
+        textLayerDiv.innerHTML = '';
+        textLayerDiv.style.width = viewport.width + 'px';
+        textLayerDiv.style.height = viewport.height + 'px';
+
+        // Get image dimensions from OCR data
+        const ocrImageWidth = ocrCoordinates.image_width || 1;
+        const ocrImageHeight = ocrCoordinates.image_height || 1;
+
+        // Calculate scale factors from OCR image to PDF viewport
+        const scaleX = viewport.width / ocrImageWidth;
+        const scaleY = viewport.height / ocrImageHeight;
+
+        console.log(`OCR Overlay: Rendering ${ocrCoordinates.words.length} words (scale: ${scaleX.toFixed(2)}x${scaleY.toFixed(2)})`);
+
+        // Render each word as a selectable span
+        ocrCoordinates.words.forEach((word, index) => {
+            const wordSpan = document.createElement('span');
+            wordSpan.textContent = word.text;
+            wordSpan.className = 'ocr-word';
+
+            // Calculate position (scale from OCR coordinates to viewport)
+            const left = word.left * scaleX;
+            const top = word.top * scaleY;
+            const width = word.width * scaleX;
+            const height = word.height * scaleY;
+
+            // Position and size the word
+            wordSpan.style.position = 'absolute';
+            wordSpan.style.left = left + 'px';
+            wordSpan.style.top = top + 'px';
+            wordSpan.style.width = width + 'px';
+            wordSpan.style.height = height + 'px';
+
+            // Style for selectable but invisible overlay
+            wordSpan.style.fontSize = height + 'px';
+            wordSpan.style.color = 'transparent'; // Invisible but selectable
+            wordSpan.style.whiteSpace = 'nowrap';
+            wordSpan.style.overflow = 'hidden';
+            wordSpan.style.userSelect = 'text';
+            wordSpan.style.cursor = 'text';
+
+            // Optional: Add visual debugging (uncomment to see word boxes)
+            // wordSpan.style.border = '1px solid rgba(255, 0, 0, 0.3)';
+            // wordSpan.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
+
+            textLayerDiv.appendChild(wordSpan);
+        });
+
+        console.log('OCR text overlay rendered successfully');
+
+    } catch (error) {
+        console.error('Failed to render OCR text layer:', error);
+    }
 }

@@ -508,6 +508,7 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
             if connector_config.connector_type == "docuware" and connector_config.docuware:
                 selected_fields = connector_config.docuware.selected_fields
                 selected_table_columns = connector_config.docuware.selected_table_columns
+                logger.info(f"[UPLOAD DEBUG] Loaded DocuWare config - {len(selected_fields)} fields, table_columns: {list(selected_table_columns.keys()) if selected_table_columns else 'None'}")
 
             # Google Drive: Extract fields based on folder structure configuration
             elif connector_config.connector_type == "google_drive" and connector_config.google_drive:

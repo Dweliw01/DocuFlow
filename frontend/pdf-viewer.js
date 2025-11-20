@@ -535,53 +535,51 @@ async function renderPage(pageNum) {
         await page.render(renderContext).promise;
 
         // Render text layer for selection (if element exists)
-        let textLayerRendered = false;
         if (textLayerDiv) {
-            try {
-                // Set text layer dimensions
-                textLayerDiv.style.width = canvas.width + 'px';
-                textLayerDiv.style.height = canvas.height + 'px';
+            // Set text layer dimensions
+            textLayerDiv.style.width = canvas.width + 'px';
+            textLayerDiv.style.height = canvas.height + 'px';
 
-                // Get text content from PDF.js (for native PDFs)
-                const textContent = await page.getTextContent();
+            // ALWAYS use OCR overlay if available (captures table content)
+            // OCR coordinates include ALL content including tables that might be images
+            if (ocrCoordinates) {
+                console.log('Rendering OCR text overlay (captures all content including tables)...');
+                await renderOCRTextLayer(page, scale, scaledViewport);
+            } else {
+                // Fallback to native text layer if no OCR coordinates
+                try {
+                    const textContent = await page.getTextContent();
 
-                // Check if PDF has native text (not scanned/image-only)
-                if (textContent && textContent.items && textContent.items.length > 0) {
-                    textLayerDiv.innerHTML = ''; // Clear previous text
+                    if (textContent && textContent.items && textContent.items.length > 0) {
+                        textLayerDiv.innerHTML = ''; // Clear previous text
 
-                    // Render text items from PDF.js
-                    textContent.items.forEach(item => {
-                        const textDiv = document.createElement('span');
-                        textDiv.textContent = item.str;
+                        // Render text items from PDF.js
+                        textContent.items.forEach(item => {
+                            const textDiv = document.createElement('span');
+                            textDiv.textContent = item.str;
 
-                        // Calculate position and size
-                        const tx = pdfjsLib.Util.transform(
-                            scaledViewport.transform,
-                            item.transform
-                        );
+                            // Calculate position and size
+                            const tx = pdfjsLib.Util.transform(
+                                scaledViewport.transform,
+                                item.transform
+                            );
 
-                        textDiv.style.left = tx[4] + 'px';
-                        textDiv.style.top = (tx[5] - item.height) + 'px';
-                        textDiv.style.fontSize = (item.height * scale) + 'px';
-                        textDiv.style.fontFamily = item.fontName;
+                            textDiv.style.left = tx[4] + 'px';
+                            textDiv.style.top = (tx[5] - item.height) + 'px';
+                            textDiv.style.fontSize = (item.height * scale) + 'px';
+                            textDiv.style.fontFamily = item.fontName;
 
-                        textLayerDiv.appendChild(textDiv);
-                    });
+                            textLayerDiv.appendChild(textDiv);
+                        });
 
-                    textLayerRendered = true;
-                    console.log('Native PDF text layer rendered');
-                } else {
-                    console.log('No native text found in PDF, will try OCR overlay');
+                        console.log('Native PDF text layer rendered (no OCR coordinates available)');
+                    } else {
+                        console.log('No text layer available (no OCR coordinates, no native text)');
+                    }
+                } catch (textError) {
+                    console.warn('Could not render text layer:', textError);
                 }
-            } catch (textError) {
-                console.warn('Could not render native text layer:', textError);
             }
-        }
-
-        // If native text layer failed or unavailable, try OCR overlay
-        if (!textLayerRendered && ocrCoordinates) {
-            console.log('Rendering OCR text overlay...');
-            await renderOCRTextLayer(page, scale, scaledViewport);
         }
 
         // Update current page

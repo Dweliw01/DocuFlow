@@ -135,15 +135,13 @@ class OCRService:
 
             # Handle PDFs (first page only for now)
             elif file_ext == '.pdf':
-                # Check if PDF is image-based
-                if not self.is_pdf_text_based(file_path):
-                    # Convert first page to image and OCR
-                    images = convert_from_path(file_path, first_page=1, last_page=1, dpi=300)
-                    if images:
-                        return self._extract_coordinates_from_image(images[0])
-
-                # Text-based PDF - return empty (already has selectable text)
-                return {'words': [], 'image_width': 0, 'image_height': 0}
+                # ALWAYS convert PDF to image and extract coordinates
+                # (We're now running OCR on all PDFs to capture table content)
+                images = convert_from_path(file_path, first_page=1, last_page=1, dpi=300)
+                if images:
+                    return self._extract_coordinates_from_image(images[0])
+                else:
+                    return {'words': [], 'image_width': 0, 'image_height': 0}
 
             return {'words': [], 'image_width': 0, 'image_height': 0}
 
@@ -234,49 +232,30 @@ class OCRService:
 
             # Handle PDFs
             elif extension == '.pdf':
-                # Check if text-based or image-based
-                if self.is_pdf_text_based(file_path):
-                    logger.info(f"PDF has embedded text, extracting...")
-                    # Extract embedded text
-                    with open(file_path, 'rb') as file:
-                        pdf_reader = PyPDF2.PdfReader(file)
-                        num_pages = min(len(pdf_reader.pages), max_pages)
+                # ALWAYS run OCR on PDFs to ensure we capture table content
+                # Tables are often images even in "text-based" PDFs
+                logger.info(f"Running OCR on PDF to capture all content including tables...")
+                # Convert to images and OCR
+                images = convert_from_path(
+                    file_path,
+                    first_page=1,
+                    last_page=min(max_pages, 5),  # Limit to 5 pages for speed
+                    dpi=300
+                )
 
-                        all_text = []
-                        for i in range(num_pages):
-                            page_text = pdf_reader.pages[i].extract_text()
-                            all_text.append(page_text)
+                all_text = []
+                for i, image in enumerate(images):
+                    logger.info(f"OCR on PDF page {i + 1}/{len(images)}")
+                    page_text = pytesseract.image_to_string(image, lang='eng')
+                    all_text.append(page_text)
 
-                        text = "\n".join(all_text).strip()
+                text = "\n\n--- Page Break ---\n\n".join(all_text).strip()
 
-                        return {
-                            'text': text,
-                            'method': 'embedded_text',
-                            'file_type': 'pdf'
-                        }
-                else:
-                    logger.info(f"Image-based PDF detected, running OCR...")
-                    # Convert to images and OCR
-                    images = convert_from_path(
-                        file_path,
-                        first_page=1,
-                        last_page=min(max_pages, 5),  # Limit to 5 pages for speed
-                        dpi=300
-                    )
-
-                    all_text = []
-                    for i, image in enumerate(images):
-                        logger.info(f"OCR on PDF page {i + 1}/{len(images)}")
-                        page_text = pytesseract.image_to_string(image, lang='eng')
-                        all_text.append(page_text)
-
-                    text = "\n\n--- Page Break ---\n\n".join(all_text).strip()
-
-                    return {
-                        'text': text,
-                        'method': 'pdf_ocr',
-                        'file_type': 'pdf'
-                    }
+                return {
+                    'text': text,
+                    'method': 'pdf_ocr',
+                    'file_type': 'pdf'
+                }
 
             else:
                 logger.warning(f"Unsupported file type: {extension}")

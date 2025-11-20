@@ -50,6 +50,14 @@ class AIService:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
             Example: (DocumentCategory.INVOICE, 0.95, ExtractedData(...))
         """
+        # DEBUG: Log what table columns we're receiving
+        logger.info(f"[AI EXTRACTION DEBUG] selected_table_columns type: {type(selected_table_columns)}")
+        logger.info(f"[AI EXTRACTION DEBUG] selected_table_columns value: {selected_table_columns}")
+        if selected_table_columns:
+            logger.info(f"[AI EXTRACTION DEBUG] Table columns provided: {list(selected_table_columns.keys())}")
+        else:
+            logger.warning(f"[AI EXTRACTION DEBUG] NO TABLE COLUMNS PROVIDED!")
+
         # Build few-shot examples if feature is enabled
         few_shot_examples = ""
         if settings.enable_few_shot_learning and organization_id:
@@ -358,18 +366,23 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
                 column_list = ", ".join(column_names)
                 logger.debug(f"Table field '{table_name}' has columns: {column_list}")
                 line_items_instruction = f"""
-7. CRITICAL: This document has line items. Extract ALL line items with the following columns:
-   {column_list}
+7. CRITICAL LINE ITEM EXTRACTION (MANDATORY):
+   This document contains a table with line items. You MUST extract ALL line items from this document.
+   Expected columns: {column_list}
 
-   For each line item, extract:
+   IMPORTANT: Even if this document looks like correspondence or another category, if you see a table with
+   products/items listed, you MUST extract them as line_items.
+
+   For EACH line item row in the table, extract:
    - description: Product/service description
-   - quantity: Quantity ordered
+   - quantity: Quantity ordered/shipped
    - unit: Unit of measure (EA, boxes, hours, etc.)
    - unit_price: Price per unit
    - amount: Line total
-   - sku: Product/SKU code (if present)
+   - sku: Product/SKU/item code (if present)
 
-   Extract EVERY line item from the document. Do not skip any items."""
+   Extract EVERY line item from the document. Do not skip any items.
+   If the document has a table with items, populate the "line_items" array in your response."""
         else:
             logger.debug("No table columns selected, using default line item extraction")
             line_items_instruction = """
@@ -390,11 +403,13 @@ INSTRUCTIONS:
 1. Categorize this document into ONE of the following categories:
    {categories_list}
 
-   IMPORTANT: If the document has any of the following characteristics, categorize it as "Invoice":
-   - Has line items with products/services and amounts
-   - Has vendor/supplier and customer information
-   - Has a total amount or invoice number
-   - Has payment terms or due dates
+   IMPORTANT CATEGORIZATION RULES:
+   - If the document has a TABLE with line items (products/services with quantities/amounts), it is likely an "Invoice" or business document, NOT "Correspondence"
+   - If the document has vendor/supplier and customer information with line items, categorize as "Invoice"
+   - If the document has a purchase order number (P.O., PO#) and line items, categorize as "Invoice"
+   - If the document has a total amount or invoice number, categorize as "Invoice"
+   - Only categorize as "Correspondence" if it's truly a letter, email, or memo WITHOUT transactional line items
+   - Purchase orders with line item tables should be categorized as "Invoice" (they're transactional documents)
 
 2. Provide a confidence score between 0.0 and 1.0
 

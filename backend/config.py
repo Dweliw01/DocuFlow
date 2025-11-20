@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     secret_key: str = "change-this-to-random-32-char-string-in-production"
     encryption_key: str | None = None
 
+    # AI Learning / Few-Shot Learning
+    enable_few_shot_learning: bool = False  # Feature flag for Phase 3
+
     class Config:
         """Pydantic configuration"""
         env_file = str(Path(__file__).parent.parent / ".env")

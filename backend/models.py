@@ -275,6 +275,7 @@ class DocumentResult(BaseModel):
     Result of processing a single document.
     Contains categorization info, confidence score, extracted text preview, and structured data.
     """
+    id: Optional[int] = None  # Document database ID (for review/edit functionality)
     filename: str
     original_path: str
     category: DocumentCategory
@@ -282,6 +283,8 @@ class DocumentResult(BaseModel):
     processed_path: Optional[str] = None
     extracted_text_preview: str  # First 500 chars of extracted text
     extracted_data: Optional[ExtractedData] = None  # Structured data extracted from document
+    connector_type: Optional[str] = None  # Which connector this document was processed with
+    connector_config_snapshot: Optional[str] = None  # Connector config snapshot for historical field display
     error: Optional[str] = None
     processing_time: float  # seconds
     upload_result: Optional['UploadResult'] = None  # Result of connector upload (if configured)
@@ -353,8 +356,13 @@ class FolderStructureLevel(str, Enum):
     COMPANY = "company"  # Company name (general)
     YEAR = "year"  # Year from document date (2025, 2024, etc.)
     YEAR_MONTH = "year_month"  # Year-Month from document date (2025-01, 2025-02, etc.)
+    MONTH = "month"  # Month name from document date (January, February, etc.)
+    QUARTER = "quarter"  # Quarter from document date (Q1, Q2, Q3, Q4)
     DOCUMENT_TYPE = "document_type"  # Specific document type (Purchase Invoice, W2, etc.)
+    DOCUMENT_NUMBER = "document_number"  # Document number (Invoice #, Receipt #, etc.)
     PERSON_NAME = "person_name"  # Person name (for HR/personal docs)
+    PROJECT = "project"  # Project name or code
+    CUSTOM = "custom"  # Custom field (user-defined)
     NONE = "none"  # No folder level (skip)
 
 
@@ -430,8 +438,11 @@ class GoogleDriveConfig(BaseModel):
 
     # Dynamic folder structure configuration
     primary_level: FolderStructureLevel = FolderStructureLevel.CATEGORY  # First folder level
+    primary_custom_field: Optional[str] = None  # Custom field name if primary_level is CUSTOM
     secondary_level: FolderStructureLevel = FolderStructureLevel.VENDOR  # Second folder level
+    secondary_custom_field: Optional[str] = None  # Custom field name if secondary_level is CUSTOM
     tertiary_level: FolderStructureLevel = FolderStructureLevel.NONE  # Third folder level (optional)
+    tertiary_custom_field: Optional[str] = None  # Custom field name if tertiary_level is CUSTOM
 
 
 class OneDriveConfig(BaseModel):

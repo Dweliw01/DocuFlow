@@ -49,6 +49,76 @@ logger = logging.getLogger(__name__)
 # Create API router
 router = APIRouter()
 
+
+# ============================================================================
+# Helper Functions for Google Drive Folder Structure
+# ============================================================================
+
+def get_google_drive_fields_from_folder_config(google_drive_config) -> List[str]:
+    """
+    Extract field names needed based on Google Drive folder structure configuration.
+    Maps folder structure levels to field names that need to be extracted.
+
+    Args:
+        google_drive_config: GoogleDriveConfig object with folder structure settings
+
+    Returns:
+        List of field names to extract (e.g., ['vendor', 'date', 'category'])
+    """
+    from models import FolderStructureLevel
+
+    fields_needed = []
+
+    # Map folder structure levels to field names
+    level_to_field_map = {
+        FolderStructureLevel.CATEGORY: 'category',
+        FolderStructureLevel.VENDOR: 'vendor',
+        FolderStructureLevel.CLIENT: 'client',
+        FolderStructureLevel.COMPANY: 'company',
+        FolderStructureLevel.YEAR: 'date',  # Need date to extract year
+        FolderStructureLevel.YEAR_MONTH: 'date',  # Need date to extract year-month
+        FolderStructureLevel.MONTH: 'date',  # Need date to extract month
+        FolderStructureLevel.QUARTER: 'date',  # Need date to extract quarter
+        FolderStructureLevel.DOCUMENT_TYPE: 'document_type',
+        FolderStructureLevel.DOCUMENT_NUMBER: 'document_number',
+        FolderStructureLevel.PERSON_NAME: 'person_name',
+        FolderStructureLevel.PROJECT: 'project',
+        FolderStructureLevel.CUSTOM: None,  # Will use custom field name
+        FolderStructureLevel.NONE: None  # Skip
+    }
+
+    # Check primary level
+    primary_value = google_drive_config.primary_level.value if hasattr(google_drive_config.primary_level, 'value') else google_drive_config.primary_level
+    if primary_value == 'custom':
+        if google_drive_config.primary_custom_field:
+            fields_needed.append(google_drive_config.primary_custom_field)
+    elif google_drive_config.primary_level in level_to_field_map:
+        field = level_to_field_map[google_drive_config.primary_level]
+        if field and field not in fields_needed:
+            fields_needed.append(field)
+
+    # Check secondary level
+    secondary_value = google_drive_config.secondary_level.value if hasattr(google_drive_config.secondary_level, 'value') else google_drive_config.secondary_level
+    if secondary_value == 'custom':
+        if google_drive_config.secondary_custom_field:
+            fields_needed.append(google_drive_config.secondary_custom_field)
+    elif google_drive_config.secondary_level in level_to_field_map:
+        field = level_to_field_map[google_drive_config.secondary_level]
+        if field and field not in fields_needed:
+            fields_needed.append(field)
+
+    # Check tertiary level
+    tertiary_value = google_drive_config.tertiary_level.value if hasattr(google_drive_config.tertiary_level, 'value') else google_drive_config.tertiary_level
+    if tertiary_value == 'custom':
+        if google_drive_config.tertiary_custom_field:
+            fields_needed.append(google_drive_config.tertiary_custom_field)
+    elif google_drive_config.tertiary_level in level_to_field_map:
+        field = level_to_field_map[google_drive_config.tertiary_level]
+        if field and field not in fields_needed:
+            fields_needed.append(field)
+
+    return fields_needed
+
 # Initialize services (singleton pattern - create once, use throughout)
 ocr_service = OCRService()
 ai_service = AIService()
@@ -215,6 +285,7 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                     confidence=0.0,
                     extracted_text_preview="",
                     extracted_data=None,
+                    connector_type=None,  # Failed before connector determination
                     error=str(e),
                     processing_time=0.0
                 )
@@ -238,8 +309,8 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                         cursor.execute('''
                             INSERT INTO document_metadata
                             (organization_id, batch_id, filename, file_path, category,
-                             extracted_data, status, confidence_score, connector_type, processed_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             extracted_data, status, confidence_score, connector_type, connector_config_snapshot, processed_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             organization_id,
                             batch_id,
@@ -249,11 +320,15 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
                             json.dumps(scored_data),  # Store as JSON string
                             'pending_review',  # Initial status
                             confidence_score,
-                            None,  # connector_type will be set on approval
+                            result.connector_type,  # Store which connector this document was processed with
+                            result.connector_config_snapshot,  # Store config snapshot for historical field display
                             datetime.utcnow()
                         ))
                         conn.commit()
                         doc_id = cursor.lastrowid
+
+                        # Set document ID on result for frontend (enables Review button)
+                        result.id = doc_id
 
                         # Run review workflow to determine if should auto-upload
                         review_result = await process_document_for_review(
@@ -411,31 +486,46 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
         if not ocr_service.validate_ocr_quality(extracted_text):
             raise Exception(f"Text quality check failed - insufficient text extracted (method: {extraction_method})")
 
+        # Get user's organization_id for few-shot learning
+        organization_id = None
+        user = await get_user_by_id(user_id)
+        if user and user.get('organization_id'):
+            organization_id = user['organization_id']
+
         # Get selected fields from connector config (if configured)
         selected_fields = None
         selected_table_columns = None
+        connector_type = None
+        connector_config_json = None
         config_tuple = await get_current_config_with_decrypted_password(user_id)
         if config_tuple:
             connector_config, _ = config_tuple
+            connector_type = connector_config.connector_type
+            # Save connector config snapshot for historical field display
+            connector_config_json = connector_config.model_dump_json() if hasattr(connector_config, 'model_dump_json') else connector_config.json()
+
+            # DocuWare: Extract user-selected fields
             if connector_config.connector_type == "docuware" and connector_config.docuware:
                 selected_fields = connector_config.docuware.selected_fields
                 selected_table_columns = connector_config.docuware.selected_table_columns
 
-        # Step 2: AI Categorization and Data Extraction (dynamic if fields selected)
+            # Google Drive: Extract fields based on folder structure configuration
+            elif connector_config.connector_type == "google_drive" and connector_config.google_drive:
+                selected_fields = get_google_drive_fields_from_folder_config(connector_config.google_drive)
+                logger.info(f"[Google Drive] Extracting fields for folder structure: {selected_fields}")
+
+        # Step 2: AI Categorization and Data Extraction (dynamic if fields selected, with few-shot learning)
         category, confidence, extracted_data = await ai_service.categorize_document(
             extracted_text,
             filename,
             selected_fields=selected_fields,
-            selected_table_columns=selected_table_columns
+            selected_table_columns=selected_table_columns,
+            organization_id=organization_id  # Phase 3: Few-shot learning
         )
 
         # Step 3: AI Learning - Apply learned suggestions and adjust confidence
         try:
-            # Get user's organization_id
-            user = await get_user_by_id(user_id)
-            if user and user.get('organization_id'):
-                organization_id = user['organization_id']
-
+            if organization_id:
                 # Convert ExtractedData model to dict for AI learning
                 extracted_data_dict = extracted_data.model_dump() if hasattr(extracted_data, 'model_dump') else (
                     extracted_data.dict() if hasattr(extracted_data, 'dict') else extracted_data
@@ -482,6 +572,8 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
             confidence=confidence,
             extracted_text_preview=text_preview,
             extracted_data=extracted_data,
+            connector_type=connector_type,
+            connector_config_snapshot=connector_config_json,
             error=None,
             processing_time=processing_time
         )

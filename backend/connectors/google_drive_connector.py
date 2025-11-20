@@ -425,16 +425,71 @@ class GoogleDriveConnector:
                     return datetime.now().strftime('%Y-%m')
             return datetime.now().strftime('%Y-%m')
 
+        elif level == 'month':
+            if extracted_data.date:
+                try:
+                    # Extract month name from date
+                    date_str = extracted_data.date.split('T')[0] if 'T' in extracted_data.date else extracted_data.date
+                    # Parse date and get month name
+                    from datetime import datetime as dt
+                    date_obj = dt.strptime(date_str.split(' ')[0], '%Y-%m-%d')
+                    month_name = date_obj.strftime('%B')  # Full month name (January, February, etc.)
+                    logger.debug(f"Extracted month: {month_name} (from date: {extracted_data.date})")
+                    return month_name
+                except Exception as e:
+                    logger.warning(f"Failed to extract month from date: {extracted_data.date}, using current month. Error: {e}")
+                    return datetime.now().strftime('%B')
+            logger.debug(f"No date found, using current month: {datetime.now().strftime('%B')}")
+            return datetime.now().strftime('%B')
+
+        elif level == 'quarter':
+            if extracted_data.date:
+                try:
+                    # Extract quarter from date
+                    date_str = extracted_data.date.split('T')[0] if 'T' in extracted_data.date else extracted_data.date
+                    month = int(date_str.split('-')[1])
+                    quarter = f"Q{((month - 1) // 3) + 1}"
+                    logger.debug(f"Extracted quarter: {quarter} (from date: {extracted_data.date})")
+                    return quarter
+                except Exception as e:
+                    logger.warning(f"Failed to extract quarter from date: {extracted_data.date}, using current quarter. Error: {e}")
+                    current_month = datetime.now().month
+                    return f"Q{((current_month - 1) // 3) + 1}"
+            current_month = datetime.now().month
+            quarter = f"Q{((current_month - 1) // 3) + 1}"
+            logger.debug(f"No date found, using current quarter: {quarter}")
+            return quarter
+
         elif level == 'document_type':
             doc_type = extracted_data.document_type or category.value
             logger.debug(f"Extracted document_type: {doc_type} (from AI: {extracted_data.document_type}, category fallback: {category.value})")
             return doc_type
 
+        elif level == 'document_number':
+            doc_number = extracted_data.document_number
+            logger.debug(f"Extracted document_number: {doc_number}")
+            return doc_number or None
+
         elif level == 'person_name':
             return extracted_data.person_name or None
 
+        elif level == 'project':
+            # Check if project field exists in other_data
+            if hasattr(extracted_data, 'other_data') and extracted_data.other_data:
+                project = extracted_data.other_data.get('project') or extracted_data.other_data.get('Project')
+                logger.debug(f"Extracted project from other_data: {project}")
+                return project
+            logger.debug(f"No project found in extracted_data")
+            return None
+
         elif level == 'none':
             return None
+
+        # Handle custom fields - check if it's a custom field name in other_data
+        if hasattr(extracted_data, 'other_data') and extracted_data.other_data and level in extracted_data.other_data:
+            custom_value = extracted_data.other_data.get(level)
+            logger.debug(f"Extracted custom field '{level}': {custom_value}")
+            return custom_value
 
         return None
 
@@ -459,23 +514,38 @@ class GoogleDriveConnector:
         try:
             # Get folder structure configuration (from user's frontend settings)
             primary_level = storage_config.get('primary_level')
+            primary_custom_field = storage_config.get('primary_custom_field')
             secondary_level = storage_config.get('secondary_level')
+            secondary_custom_field = storage_config.get('secondary_custom_field')
             tertiary_level = storage_config.get('tertiary_level')
+            tertiary_custom_field = storage_config.get('tertiary_custom_field')
 
             logger.info(f"Building folder path with user config: primary={primary_level}, secondary={secondary_level}, tertiary={tertiary_level}")
 
             # Build list of folder levels
             levels = []
-            for level in [primary_level, secondary_level, tertiary_level]:
+            level_configs = [
+                (primary_level, primary_custom_field),
+                (secondary_level, secondary_custom_field),
+                (tertiary_level, tertiary_custom_field)
+            ]
+
+            for level, custom_field in level_configs:
                 if level and level != 'none':
-                    folder_name = self._extract_folder_value(level, extracted_data, category)
+                    # Extract string value from enum if needed
+                    level_value = level.value if hasattr(level, 'value') else level
+
+                    # Use custom field name if level is 'custom'
+                    level_key = custom_field if level_value == 'custom' and custom_field else level_value
+
+                    folder_name = self._extract_folder_value(level_key, extracted_data, category)
                     if folder_name:
                         # Sanitize folder name
                         folder_name = self._sanitize_filename_part(folder_name)
                         levels.append(folder_name)
-                        logger.debug(f"Extracted folder from '{level}': {folder_name}")
+                        logger.debug(f"Extracted folder from '{level_value}' (field: {level_key}): {folder_name}")
                     else:
-                        logger.warning(f"Could not extract folder value for level '{level}' - no data available")
+                        logger.warning(f"Could not extract folder value for level '{level_value}' (field: {level_key}) - no data available")
 
             # If no levels extracted, fallback to category only
             if not levels:

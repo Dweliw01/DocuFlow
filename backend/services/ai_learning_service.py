@@ -347,6 +347,126 @@ class AILearningService:
         finally:
             conn.close()
 
+    def get_few_shot_examples(
+        self,
+        organization_id: int,
+        selected_fields: Optional[List[str]] = None,
+        category: Optional[str] = None,
+        limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Get few-shot examples from correction history to inject into AI prompts.
+
+        Args:
+            organization_id: Organization ID
+            selected_fields: Optional list of fields to focus on
+            category: Optional document category to filter by
+            limit: Maximum number of examples to return
+
+        Returns:
+            List of example dictionaries with filename, category, and corrections
+        """
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Query to get recent reviewed documents with corrections
+            query = '''
+                SELECT DISTINCT
+                    d.id,
+                    d.filename,
+                    d.category,
+                    d.extracted_text_preview
+                FROM documents d
+                INNER JOIN field_corrections fc ON fc.document_id = d.id
+                WHERE d.organization_id = ?
+                    AND fc.organization_id = ?
+            '''
+            params = [organization_id, organization_id]
+
+            # Filter by category if provided
+            if category:
+                query += ' AND d.category = ?'
+                params.append(category)
+
+            query += ' ORDER BY fc.created_at DESC LIMIT ?'
+            params.append(limit)
+
+            cursor.execute(query, params)
+            documents = cursor.fetchall()
+
+            examples = []
+            for doc in documents:
+                # Get all corrections for this document
+                cursor.execute('''
+                    SELECT
+                        field_name,
+                        original_value,
+                        corrected_value
+                    FROM field_corrections
+                    WHERE document_id = ? AND organization_id = ?
+                ''', (doc['id'], organization_id))
+
+                corrections = cursor.fetchall()
+
+                # Filter corrections by selected_fields if provided
+                if selected_fields:
+                    corrections = [c for c in corrections if c['field_name'] in selected_fields]
+
+                if corrections:
+                    examples.append({
+                        'filename': doc['filename'],
+                        'category': doc['category'],
+                        'text_preview': doc['extracted_text_preview'][:200] if doc['extracted_text_preview'] else '',
+                        'corrections': [
+                            {
+                                'field': c['field_name'],
+                                'corrected_value': c['corrected_value']
+                            }
+                            for c in corrections
+                        ]
+                    })
+
+            logger.info(f"[FEW-SHOT] Retrieved {len(examples)} examples for organization {organization_id}")
+            return examples
+
+        finally:
+            conn.close()
+
+    def format_few_shot_examples(self, examples: List[Dict[str, Any]]) -> str:
+        """
+        Format few-shot examples into a text block for AI prompt injection.
+
+        Args:
+            examples: List of example dictionaries from get_few_shot_examples()
+
+        Returns:
+            Formatted string to inject into AI prompt
+        """
+        if not examples:
+            return ""
+
+        formatted = "\n\nHere are some examples from your previous work to help guide your extraction:\n\n"
+
+        for i, example in enumerate(examples, 1):
+            formatted += f"Example {i}:\n"
+            formatted += f"Filename: {example['filename']}\n"
+            formatted += f"Category: {example['category']}\n"
+
+            if example.get('text_preview'):
+                formatted += f"Text Preview: {example['text_preview']}...\n"
+
+            formatted += "Corrected Values:\n"
+            for correction in example['corrections']:
+                formatted += f"  - {correction['field']}: {correction['corrected_value']}\n"
+
+            formatted += "\n"
+
+        formatted += "Use these examples as reference for similar documents, but always extract data from the current document.\n"
+
+        logger.debug(f"[FEW-SHOT] Formatted {len(examples)} examples ({len(formatted)} chars)")
+        return formatted
+
 
 # Singleton instance
 _ai_learning_service = None

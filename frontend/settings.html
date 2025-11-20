@@ -474,10 +474,20 @@
                         <option value="company">Company Name</option>
                         <option value="year">Year (2025, 2024, etc.)</option>
                         <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="month">Month (January, February, etc.)</option>
+                        <option value="quarter">Quarter (Q1, Q2, Q3, Q4)</option>
                         <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="document_number">Document Number (Invoice #, Receipt #, etc.)</option>
                         <option value="person_name">Person Name (for HR/personal docs)</option>
+                        <option value="project">Project Name/Code</option>
+                        <option value="custom">Custom Field...</option>
                     </select>
                     <span class="form-hint">First level of folder organization</span>
+                </div>
+                <div id="folder-primary-custom-container" class="form-group" style="display: none;">
+                    <label class="form-label">Custom Field Name</label>
+                    <input type="text" id="folder-primary-custom" class="form-input" placeholder="e.g., Job Number, Store ID, Contract Number">
+                    <span class="form-hint">Enter the name of the custom field to extract</span>
                 </div>
 
                 <div class="form-group">
@@ -490,10 +500,20 @@
                         <option value="company">Company Name</option>
                         <option value="year">Year (2025, 2024, etc.)</option>
                         <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="month">Month (January, February, etc.)</option>
+                        <option value="quarter">Quarter (Q1, Q2, Q3, Q4)</option>
                         <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="document_number">Document Number (Invoice #, Receipt #, etc.)</option>
                         <option value="person_name">Person Name (for HR/personal docs)</option>
+                        <option value="project">Project Name/Code</option>
+                        <option value="custom">Custom Field...</option>
                     </select>
                     <span class="form-hint">Second level of folder organization</span>
+                </div>
+                <div id="folder-secondary-custom-container" class="form-group" style="display: none;">
+                    <label class="form-label">Custom Field Name</label>
+                    <input type="text" id="folder-secondary-custom" class="form-input" placeholder="e.g., Job Number, Store ID, Contract Number">
+                    <span class="form-hint">Enter the name of the custom field to extract</span>
                 </div>
 
                 <div class="form-group">
@@ -502,14 +522,24 @@
                         <option value="none">None (skip this level)</option>
                         <option value="year">Year (2025, 2024, etc.)</option>
                         <option value="year_month">Year-Month (2025-01, 2025-02, etc.)</option>
+                        <option value="month">Month (January, February, etc.)</option>
+                        <option value="quarter">Quarter (Q1, Q2, Q3, Q4)</option>
                         <option value="category">Category (Invoice, Receipt, Contract, etc.)</option>
                         <option value="vendor">Vendor/Supplier Name</option>
                         <option value="client">Client/Customer Name</option>
                         <option value="company">Company Name</option>
                         <option value="document_type">Document Type (Purchase Invoice, W2, etc.)</option>
+                        <option value="document_number">Document Number (Invoice #, Receipt #, etc.)</option>
                         <option value="person_name">Person Name (for HR/personal docs)</option>
+                        <option value="project">Project Name/Code</option>
+                        <option value="custom">Custom Field...</option>
                     </select>
                     <span class="form-hint">Third level of folder organization</span>
+                </div>
+                <div id="folder-tertiary-custom-container" class="form-group" style="display: none;">
+                    <label class="form-label">Custom Field Name</label>
+                    <input type="text" id="folder-tertiary-custom" class="form-input" placeholder="e.g., Job Number, Store ID, Contract Number">
+                    <span class="form-hint">Enter the name of the custom field to extract</span>
                 </div>
 
                 <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">

@@ -53,9 +53,18 @@ function setupEventListeners() {
     document.getElementById('gdrive-disconnect-btn').addEventListener('click', disconnectGoogleDrive);
 
     // Google Drive folder structure dropdowns
-    document.getElementById('folder-primary')?.addEventListener('change', updateFolderPreview);
-    document.getElementById('folder-secondary')?.addEventListener('change', updateFolderPreview);
-    document.getElementById('folder-tertiary')?.addEventListener('change', updateFolderPreview);
+    document.getElementById('folder-primary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('primary');
+        updateFolderPreview();
+    });
+    document.getElementById('folder-secondary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('secondary');
+        updateFolderPreview();
+    });
+    document.getElementById('folder-tertiary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('tertiary');
+        updateFolderPreview();
+    });
 
     // Cabinet selection
     document.getElementById('dw-cabinet').addEventListener('change', handleCabinetChange);
@@ -77,6 +86,23 @@ function setupEventListeners() {
 
     // Load review settings
     loadReviewSettings();
+}
+
+// ============================================================================
+// Helper Functions for Custom Fields
+// ============================================================================
+
+function toggleCustomFieldInput(level) {
+    const select = document.getElementById(`folder-${level}`);
+    const customContainer = document.getElementById(`folder-${level}-custom-container`);
+
+    if (select && customContainer) {
+        if (select.value === 'custom') {
+            customContainer.style.display = 'block';
+        } else {
+            customContainer.style.display = 'none';
+        }
+    }
 }
 
 // ============================================================================
@@ -863,6 +889,14 @@ async function saveConfiguration() {
             const secondaryLevel = document.getElementById('folder-secondary').value;
             const tertiaryLevel = document.getElementById('folder-tertiary').value;
 
+            // Get custom field names if "custom" is selected
+            const primaryCustomField = primaryLevel === 'custom' ?
+                document.getElementById('folder-primary-custom').value.trim() : null;
+            const secondaryCustomField = secondaryLevel === 'custom' ?
+                document.getElementById('folder-secondary-custom').value.trim() : null;
+            const tertiaryCustomField = tertiaryLevel === 'custom' ?
+                document.getElementById('folder-tertiary-custom').value.trim() : null;
+
             // Get current config and update folder name + structure
             const currentConfigResponse = await authenticatedFetch('/api/connectors/config');
             const currentConfig = await currentConfigResponse.json();
@@ -875,8 +909,11 @@ async function saveConfiguration() {
             // Update folder name and structure
             currentConfig.google_drive.root_folder_name = rootFolderName;
             currentConfig.google_drive.primary_level = primaryLevel;
+            currentConfig.google_drive.primary_custom_field = primaryCustomField;
             currentConfig.google_drive.secondary_level = secondaryLevel;
+            currentConfig.google_drive.secondary_custom_field = secondaryCustomField;
             currentConfig.google_drive.tertiary_level = tertiaryLevel;
+            currentConfig.google_drive.tertiary_custom_field = tertiaryCustomField;
             config = currentConfig;
         }
 
@@ -1017,8 +1054,13 @@ function displayConfigurationSummary(config) {
             'company': 'Company',
             'year': 'Year',
             'year_month': 'Year-Month',
+            'month': 'Month',
+            'quarter': 'Quarter',
             'document_type': 'Document Type',
+            'document_number': 'Document Number',
             'person_name': 'Person Name',
+            'project': 'Project',
+            'custom': 'Custom',
             'none': null
         };
 
@@ -1114,6 +1156,22 @@ async function editConfiguration() {
         document.getElementById('folder-primary').value = gd.primary_level || 'category';
         document.getElementById('folder-secondary').value = gd.secondary_level || 'vendor';
         document.getElementById('folder-tertiary').value = gd.tertiary_level || 'none';
+
+        // Pre-populate custom field inputs and show/hide them
+        if (gd.primary_custom_field) {
+            document.getElementById('folder-primary-custom').value = gd.primary_custom_field;
+        }
+        if (gd.secondary_custom_field) {
+            document.getElementById('folder-secondary-custom').value = gd.secondary_custom_field;
+        }
+        if (gd.tertiary_custom_field) {
+            document.getElementById('folder-tertiary-custom').value = gd.tertiary_custom_field;
+        }
+
+        // Show/hide custom field inputs based on selection
+        toggleCustomFieldInput('primary');
+        toggleCustomFieldInput('secondary');
+        toggleCustomFieldInput('tertiary');
 
         // Update preview
         updateFolderPreview();

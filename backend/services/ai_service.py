@@ -28,7 +28,14 @@ class AIService:
         self.model = settings.claude_model
         logger.info(f"[OK] AI Service initialized with {self.model}")
 
-    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None, selected_table_columns: Optional[dict] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+    async def categorize_document(
+        self,
+        text: str,
+        filename: str,
+        selected_fields: Optional[list] = None,
+        selected_table_columns: Optional[dict] = None,
+        organization_id: Optional[int] = None
+    ) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """
         Categorize document using AI and extract structured data.
 
@@ -37,17 +44,36 @@ class AIService:
             filename: Original filename (provides additional context)
             selected_fields: Optional list of DocuWare field names to extract (if provided, uses dynamic extraction)
             selected_table_columns: Optional dict of table field names -> column definitions
+            organization_id: Optional organization ID for few-shot learning (Phase 3)
 
         Returns:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
             Example: (DocumentCategory.INVOICE, 0.95, ExtractedData(...))
         """
+        # Build few-shot examples if feature is enabled
+        few_shot_examples = ""
+        if settings.enable_few_shot_learning and organization_id:
+            try:
+                from services.ai_learning_service import get_ai_learning_service
+                learning_service = get_ai_learning_service()
+                examples = learning_service.get_few_shot_examples(
+                    organization_id=organization_id,
+                    selected_fields=selected_fields,
+                    limit=3
+                )
+                few_shot_examples = learning_service.format_few_shot_examples(examples)
+                if few_shot_examples:
+                    logger.info(f"[FEW-SHOT] Injecting {len(examples)} examples into prompt")
+            except Exception as e:
+                logger.warning(f"[FEW-SHOT] Failed to get examples: {e}")
+                # Continue without few-shot examples rather than failing
+
         if selected_fields:
             # Use dynamic field extraction based on DocuWare fields
-            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields, selected_table_columns)
+            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields, selected_table_columns, few_shot_examples)
         else:
             # Use default extraction
-            prompt = self._build_categorization_prompt(text, filename)
+            prompt = self._build_categorization_prompt(text, filename, few_shot_examples)
 
         try:
             response = await self._categorize_claude(prompt)
@@ -61,10 +87,18 @@ class AIService:
             # Fallback: return "Other" with low confidence and no extracted data
             return DocumentCategory.OTHER, 0.3, None
 
-    def _build_categorization_prompt(self, text: str, filename: str) -> str:
+    def _build_categorization_prompt(self, text: str, filename: str, few_shot_examples: str = "") -> str:
         """
         Build the categorization prompt for Claude.
         Includes clear instructions for categorization AND structured data extraction.
+
+        Args:
+            text: Document text
+            filename: Document filename
+            few_shot_examples: Optional few-shot examples from correction history
+
+        Returns:
+            Prompt string
         """
         # Truncate text if too long (to save on API costs and stay within context limits)
         max_chars = 4000
@@ -73,7 +107,10 @@ class AIService:
 
         categories_list = ", ".join([cat.value for cat in DocumentCategory])
 
-        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract structured data.
+        # Inject few-shot examples if provided
+        few_shot_section = few_shot_examples if few_shot_examples else ""
+
+        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract structured data.{few_shot_section}
 
 FILENAME: {filename}
 
@@ -284,7 +321,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         # Default to OTHER if no match
         return DocumentCategory.OTHER
 
-    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list, selected_table_columns: Optional[dict] = None) -> str:
+    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list, selected_table_columns: Optional[dict] = None, few_shot_examples: str = "") -> str:
         """
         Build a dynamic prompt that extracts specific DocuWare fields.
 
@@ -293,6 +330,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
             filename: Original filename
             selected_fields: List of DocuWare field names to extract
             selected_table_columns: Optional dict of table field names -> column definitions
+            few_shot_examples: Optional few-shot examples from correction history
 
         Returns:
             Prompt string for Claude
@@ -307,6 +345,9 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
 
         # Debug logging
         logger.debug(f"AI Extraction - Requested fields: {selected_fields}")
+
+        # Inject few-shot examples if provided
+        few_shot_section = few_shot_examples if few_shot_examples else ""
 
         # Build line item extraction instructions if table columns are selected
         line_items_instruction = ""
@@ -338,7 +379,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
    - unit_price: Price per unit
    - amount: Line total"""
 
-        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract specific fields.
+        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract specific fields.{few_shot_section}
 
 FILENAME: {filename}
 

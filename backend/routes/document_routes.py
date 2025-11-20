@@ -722,3 +722,63 @@ def _get_source_field_for_level(level_type: str) -> str:
         'person_name': 'person_name'
     }
     return field_mapping.get(level_type, level_type)
+
+
+@router.delete("/{doc_id}")
+async def dismiss_document(
+    doc_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Dismiss/skip a document from the review queue.
+    Updates status to 'skipped' to hide it from pending documents.
+
+    Args:
+        doc_id: Document ID to dismiss
+        current_user: Current authenticated user
+
+    Returns:
+        Success message
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Verify document exists and belongs to user's organization
+        cursor.execute('''
+            SELECT id, organization_id, status FROM document_metadata
+            WHERE id = ?
+        ''', (doc_id,))
+
+        doc = cursor.fetchone()
+
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc['organization_id'] != current_user['organization_id']:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Update status to skipped
+        cursor.execute('''
+            UPDATE document_metadata
+            SET status = 'skipped', approved_at = ?
+            WHERE id = ?
+        ''', (datetime.utcnow(), doc_id))
+
+        conn.commit()
+
+        logger.info(f"Document {doc_id} dismissed by user {current_user['id']}")
+
+        return {
+            'success': True,
+            'message': 'Document dismissed successfully',
+            'document_id': doc_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to dismiss document {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()

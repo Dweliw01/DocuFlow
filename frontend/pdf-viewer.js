@@ -12,7 +12,6 @@ let corrections = {};
 let currentEditingField = null;
 let highlightMode = false;
 let highlightTargetField = null;
-let connectorConfig = null;  // Store connector configuration for line items
 
 // PDF.js configuration
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -20,7 +19,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // Get document ID from URL
 const urlParams = new URLSearchParams(window.location.search);
 const docId = urlParams.get('id');
-const viewMode = urlParams.get('mode'); // 'view' for read-only, null for review mode
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -28,14 +26,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         showToast('No document ID provided', 'error');
         setTimeout(() => window.location.href = '/dashboard.html', 2000);
         return;
-    }
-
-    // Hide approve/reject buttons if in view-only mode
-    if (viewMode === 'view') {
-        const actionButtons = document.getElementById('action-buttons');
-        if (actionButtons) {
-            actionButtons.style.display = 'none';
-        }
     }
 
     // Initialize resizable divider
@@ -68,9 +58,6 @@ async function loadDocument() {
 
         currentDocument = await response.json();
 
-        // Store connector configuration if available
-        connectorConfig = currentDocument.connector_config;
-
         // Update UI with document info
         document.getElementById('doc-title').textContent = currentDocument.filename;
 
@@ -83,20 +70,8 @@ async function loadDocument() {
         // Load folder preview for Google Drive
         await loadFolderPreview();
 
-        // Detect file type and load appropriate viewer
-        const filename = currentDocument.filename.toLowerCase();
-        const isImage = filename.endsWith('.jpg') || filename.endsWith('.jpeg') ||
-                       filename.endsWith('.png') || filename.endsWith('.tiff') ||
-                       filename.endsWith('.tif') || filename.endsWith('.bmp') ||
-                       filename.endsWith('.gif');
-
-        if (isImage) {
-            // Load image viewer
-            await loadImage(currentDocument.id);
-        } else {
-            // Load PDF viewer
-            await loadPdf(currentDocument.id);
-        }
+        // Load PDF
+        await loadPdf(currentDocument.id);
 
     } catch (error) {
         console.error('Error loading document:', error);
@@ -134,82 +109,63 @@ function updateOverallConfidence(score) {
 }
 
 /**
- * Get allowed fields based on connector configuration
- */
-function getAllowedFields() {
-    // If no connector config, show all fields (local/no connector)
-    if (!connectorConfig || !connectorConfig.connector_type) {
-        return null; // null means show all fields
-    }
-
-    const connectorType = connectorConfig.connector_type;
-
-    if (connectorType === 'none' || connectorType === 'local') {
-        return null; // Show all fields
-    }
-
-    if (connectorType === 'docuware') {
-        // For DocuWare, show ALL extracted fields
-        // The user configures which DocuWare fields to map to during upload
-        // But in the review workflow, they should see ALL extracted data
-        // so they can verify and correct everything before approval
-        // The backend handles the field mapping during the upload process
-        return null; // null = show all fields
-    }
-
-    if (connectorType === 'google_drive') {
-        // Google Drive uses folder levels
-        return ['level_1', 'level_2', 'level_3', 'filename'];
-    }
-
-    return null; // Default: show all
-}
-
-/**
  * Render extracted fields in the sidebar
  */
 function renderFields(extractedData, existingCorrections) {
     const container = document.getElementById('fields-content');
 
-    // Get connector type to determine which sections to show
-    const connectorType = connectorConfig ? connectorConfig.connector_type : 'none';
-
-    // For DocuWare: ONLY show "DocuWare Fields" section + Line Items
-    // For Google Drive: ONLY show folder level fields
-    // For Local/None: Show all standard field groups
-    const showStandardGroups = (connectorType === 'none' || connectorType === 'local' || !connectorType);
-
-    // Get allowed fields based on connector configuration
-    const allowedFields = getAllowedFields();
-
-    // Define field groups (only rendered for Local/None connector)
-    const fieldGroups = {
-        'Financial': ['amount', 'total', 'subtotal', 'tax', 'balance'],
-        'Dates': ['date', 'due_date', 'invoice_date', 'order_date'],
-        'Parties': ['vendor', 'client', 'customer', 'supplier', 'company'],
-        'Document Info': ['document_number', 'invoice_number', 'po_number', 'reference_number'],
-        'Contact': ['phone', 'email', 'address']
-    };
-
     let html = '';
 
-    // Render standard field groups (only for Local/None connector)
-    if (showStandardGroups) {
-        for (const [groupName, fieldList] of Object.entries(fieldGroups)) {
-        const groupFields = [];
+    // Check if document has a connector configured
+    const hasConnector = currentDocument && currentDocument.connector_type && currentDocument.connector_type !== 'none';
+    const connectorType = currentDocument?.connector_type;
 
-        for (const fieldName of fieldList) {
-            // Skip if field is not in allowed list (when connector has restrictions)
-            if (allowedFields && !allowedFields.includes(fieldName)) {
-                continue;
-            }
-
-            if (extractedData.hasOwnProperty(fieldName)) {
-                const fieldData = extractedData[fieldName];
-                const correction = existingCorrections[fieldName];
-                groupFields.push({ name: fieldName, data: fieldData, correction });
-            }
+    // If connector is configured, ONLY show connector fields
+    if (hasConnector && extractedData.other_data && typeof extractedData.other_data === 'object') {
+        const otherDataFields = [];
+        for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
+            const correction = existingCorrections[fieldName];
+            otherDataFields.push({
+                name: fieldName,
+                data: { value: value, confidence: 0.85 },
+                correction
+            });
         }
+
+        if (otherDataFields.length > 0) {
+            html += `<div class="field-group">`;
+            const connectorLabel = connectorType === 'docuware' ? 'DocuWare Fields' :
+                                   connectorType === 'google_drive' ? 'Google Drive Fields' :
+                                   'Connector Fields';
+            html += `<div class="field-group-title">${connectorLabel}</div>`;
+
+            for (const field of otherDataFields) {
+                html += renderField(field.name, field.data, field.correction);
+            }
+
+            html += `</div>`;
+        }
+    } else {
+        // No connector - show generic field groups
+        const fieldGroups = {
+            'Financial': ['amount', 'total', 'subtotal', 'tax', 'balance'],
+            'Dates': ['date', 'due_date', 'invoice_date', 'order_date'],
+            'Parties': ['vendor', 'client', 'customer', 'supplier', 'company'],
+            'Document Info': ['document_number', 'invoice_number', 'po_number', 'reference_number'],
+            'Contact': ['phone', 'email', 'address']
+        };
+
+        // Render each group
+        for (const [groupName, fieldList] of Object.entries(fieldGroups)) {
+            const groupFields = [];
+
+            for (const fieldName of fieldList) {
+                if (extractedData.hasOwnProperty(fieldName)) {
+                    const fieldData = extractedData[fieldName];
+                    const correction = existingCorrections[fieldName];
+                    groupFields.push({ name: fieldName, data: fieldData, correction });
+                }
+            }
 
             // Only render group if it has fields
             if (groupFields.length > 0) {
@@ -223,94 +179,8 @@ function renderFields(extractedData, existingCorrections) {
                 html += `</div>`;
             }
         }
-    }
 
-    // Render DocuWare Fields section (ONLY for DocuWare connector or Local/None)
-    // For Google Drive, we don't show this section
-    if (connectorType === 'docuware' || showStandardGroups) {
-        if (extractedData.other_data && typeof extractedData.other_data === 'object') {
-            const otherDataFields = [];
-            for (const [fieldName, value] of Object.entries(extractedData.other_data)) {
-                if (value !== null && value !== undefined) {
-                    const correction = existingCorrections[fieldName];
-                    otherDataFields.push({
-                        name: fieldName,
-                        data: { value: value, confidence: 0.85 },
-                        correction
-                    });
-                }
-            }
-
-            if (otherDataFields.length > 0) {
-                html += `<div class="field-group">`;
-                html += `<div class="field-group-title">DocuWare Fields</div>`;
-
-                for (const field of otherDataFields) {
-                    html += renderField(field.name, field.data, field.correction);
-                }
-
-                html += `</div>`;
-            }
-        }
-    }
-
-    // Render Google Drive folder fields section (ONLY for Google Drive connector)
-    if (connectorType === 'google_drive') {
-        const googleDriveFields = [];
-
-        // Get Google Drive configuration to know which fields are mapped to folder levels
-        const gdConfig = connectorConfig?.google_drive || {};
-        const primaryLevel = gdConfig.primary_level || 'category';
-        const secondaryLevel = gdConfig.secondary_level || 'vendor';
-        const tertiaryLevel = gdConfig.tertiary_level || 'none';
-
-        // Map level types to actual field names
-        const levelToFieldMap = {
-            'category': 'category',
-            'vendor': 'vendor',
-            'client': 'client',
-            'company': 'company',
-            'year': 'date',
-            'year_month': 'date',
-            'document_type': 'document_type',
-            'person_name': 'person_name'
-        };
-
-        // Collect fields that are used in the folder structure
-        const fieldsToShow = new Set();
-
-        [primaryLevel, secondaryLevel, tertiaryLevel].forEach(levelType => {
-            if (levelType && levelType !== 'none') {
-                const fieldName = levelToFieldMap[levelType];
-                if (fieldName) {
-                    fieldsToShow.add(fieldName);
-                }
-            }
-        });
-
-        // Add the fields to display
-        for (const fieldName of fieldsToShow) {
-            if (extractedData.hasOwnProperty(fieldName)) {
-                const fieldData = extractedData[fieldName];
-                const correction = existingCorrections[fieldName];
-                googleDriveFields.push({ name: fieldName, data: fieldData, correction });
-            }
-        }
-
-        if (googleDriveFields.length > 0) {
-            html += `<div class="field-group">`;
-            html += `<div class="field-group-title">Google Drive Folder Index Fields</div>`;
-
-            for (const field of googleDriveFields) {
-                html += renderField(field.name, field.data, field.correction);
-            }
-
-            html += `</div>`;
-        }
-    }
-
-    // Render additional fields (only for Local/None connector)
-    if (showStandardGroups) {
+        // Render additional fields not in any group
         const knownFields = Object.values(fieldGroups).flat();
         const additionalFields = [];
 
@@ -335,8 +205,8 @@ function renderFields(extractedData, existingCorrections) {
         }
     }
 
-    // Render line items table (not for Google Drive connector)
-    if (connectorType !== 'google_drive' && extractedData.line_items && Array.isArray(extractedData.line_items) && extractedData.line_items.length > 0) {
+    // Render line items table
+    if (extractedData.line_items && Array.isArray(extractedData.line_items) && extractedData.line_items.length > 0) {
         html += `<div class="field-group">`;
         html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">`;
         html += `<div class="field-group-title" style="margin-bottom: 0;">Line Items (${extractedData.line_items.length})</div>`;
@@ -466,24 +336,13 @@ function startEditField(fieldName) {
     // Replace with input
     fieldItem.classList.add('editing');
     valueDiv.innerHTML = `
-        <div style="position: relative; display: flex; align-items: center;">
-            <input type="text" class="field-input" id="input-${fieldName}" value="${currentValue}"
-                   onkeydown="handleFieldKeydown(event, '${fieldName}')" autofocus
-                   style="padding-right: 2.5rem;">
-            <button class="btn-clear-input"
-                    onclick="event.stopPropagation(); document.getElementById('input-${fieldName}').value = ''; document.getElementById('input-${fieldName}').focus();"
-                    style="position: absolute; right: 0.5rem; background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 1.25rem; padding: 0.25rem; display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; transition: all 0.2s;"
-                    onmouseover="this.style.background='#f3f4f6'; this.style.color='#374151';"
-                    onmouseout="this.style.background='none'; this.style.color='#9ca3af';"
-                    title="Clear field">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-        </div>
+        <input type="text" class="field-input" value="${currentValue}"
+               onkeydown="handleFieldKeydown(event, '${fieldName}')" autofocus>
         <div class="field-actions">
-            <button class="btn-save" onclick="event.stopPropagation(); saveFieldCorrection('${fieldName}')">
+            <button class="btn-save" onclick="saveFieldCorrection('${fieldName}')">
                 <i class="fa-solid fa-check"></i> Save
             </button>
-            <button class="btn-cancel" onclick="event.stopPropagation(); cancelEditField('${fieldName}')">
+            <button class="btn-cancel" onclick="cancelEditField('${fieldName}')">
                 <i class="fa-solid fa-xmark"></i> Cancel
             </button>
         </div>
@@ -492,14 +351,7 @@ function startEditField(fieldName) {
     // Enable highlight mode
     highlightMode = true;
     highlightTargetField = fieldName;
-    console.log('[DEBUG] Enabling highlight mode for field:', fieldName);
-    const highlightEl = document.getElementById('highlight-mode');
-    if (highlightEl) {
-        highlightEl.classList.add('active');
-        console.log('[DEBUG] Highlight mode indicator shown');
-    } else {
-        console.error('[DEBUG] highlight-mode element not found!');
-    }
+    document.getElementById('highlight-mode').classList.add('active');
 
     // Focus input
     const input = fieldItem.querySelector('.field-input');
@@ -564,25 +416,11 @@ async function saveFieldCorrection(fieldName) {
             throw new Error('Failed to save correction');
         }
 
-        // Update UI - restore normal display with new value
+        // Update UI
         const valueDiv = fieldItem.querySelector('.field-value');
-
-        // Force browser re-render
-        const originalDisplay = fieldItem.style.display;
-        fieldItem.style.display = 'none';
-        void fieldItem.offsetHeight;
-
-        valueDiv.innerHTML = newValue || '<em style="color: #9ca3af;">Empty</em>';
+        valueDiv.textContent = newValue;
         valueDiv.dataset.original = originalValue;
-
-        // Restore onclick handler
-        valueDiv.onclick = function() { startEditField(fieldName); };
-
         fieldItem.classList.remove('editing');
-
-        // Show element again
-        fieldItem.style.display = originalDisplay || '';
-        void fieldItem.offsetHeight;
 
         // Add corrected indicator
         const fieldLabel = fieldItem.querySelector('.field-name');
@@ -612,53 +450,18 @@ async function saveFieldCorrection(fieldName) {
  */
 function cancelEditField(fieldName) {
     const fieldItem = document.querySelector(`[data-field="${fieldName}"]`);
-
-    if (!fieldItem) {
-        return;
-    }
-
     const valueDiv = fieldItem.querySelector('.field-value');
-
-    if (!valueDiv) {
-        return;
-    }
-
     const originalValue = corrections[fieldName] ?
         corrections[fieldName].corrected_value :
         valueDiv.dataset.original;
 
-    // Restore the original HTML structure (not just text)
-    const displayValue = originalValue || '<em style="color: #9ca3af;">Empty</em>';
-
-    // Force browser re-render by temporarily hiding element
-    const originalDisplay = fieldItem.style.display;
-    fieldItem.style.display = 'none';
-
-    // Force reflow
-    void fieldItem.offsetHeight;
-
-    // Update content
-    valueDiv.innerHTML = displayValue;
-
-    // Restore onclick handler
-    valueDiv.onclick = function() { startEditField(fieldName); };
-
-    // Remove editing class
+    valueDiv.textContent = originalValue;
     fieldItem.classList.remove('editing');
-
-    // Show element again
-    fieldItem.style.display = originalDisplay || '';
-
-    // Force another reflow
-    void fieldItem.offsetHeight;
 
     // Disable highlight mode
     highlightMode = false;
     highlightTargetField = null;
-    const highlightModeEl = document.getElementById('highlight-mode');
-    if (highlightModeEl) {
-        highlightModeEl.classList.remove('active');
-    }
+    document.getElementById('highlight-mode').classList.remove('active');
     currentEditingField = null;
 }
 
@@ -699,177 +502,6 @@ async function loadPdf(documentId) {
 }
 
 /**
- * Load and display an image file
- */
-async function loadImage(documentId) {
-    try {
-        const token = await getToken();
-        const imageUrl = `/api/documents/${documentId}/view`;
-
-        // Hide PDF controls (page navigation)
-        const pageNav = document.querySelector('.page-nav');
-        if (pageNav) {
-            pageNav.style.display = 'none';
-        }
-
-        // Get canvas and container
-        const canvas = document.getElementById('pdf-canvas');
-        const container = document.querySelector('.pdf-canvas-container');
-        const textLayerDiv = document.getElementById('pdf-text-layer');
-
-        // Hide text layer for images (no selectable text)
-        if (textLayerDiv) {
-            textLayerDiv.style.display = 'none';
-        }
-
-        // Create image element
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        // Load image with auth header using fetch
-        const response = await fetch(imageUrl, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to load image');
-        }
-
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-
-        img.onload = async function() {
-            // Calculate scale to fit container
-            const containerWidth = container ? container.clientWidth - 80 : 800;
-            const scale = containerWidth / img.width;
-
-            // Set canvas dimensions
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-
-            // Draw image on canvas
-            const context = canvas.getContext('2d');
-            context.clearRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-            // Clean up object URL
-            URL.revokeObjectURL(objectUrl);
-
-            console.log('[DEBUG] Image loaded successfully');
-
-            // Load and render OCR text overlay
-            await loadOcrTextOverlay(documentId, scale, canvas.width, canvas.height);
-        };
-
-        img.onerror = function(error) {
-            console.error('[DEBUG] Error loading image:', error);
-            showToast('Failed to load image', 'error');
-        };
-
-        img.src = objectUrl;
-
-    } catch (error) {
-        console.error('Error loading image:', error);
-        showToast('Failed to load image: ' + error.message, 'error');
-    }
-}
-
-/**
- * Load and render OCR text overlay for images
- */
-async function loadOcrTextOverlay(documentId, displayScale, canvasWidth, canvasHeight) {
-    try {
-        const token = await getToken();
-        const ocrDataUrl = `/api/documents/${documentId}/ocr-data`;
-
-        // Fetch OCR coordinates
-        const response = await fetch(ocrDataUrl, {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-
-        if (!response.ok) {
-            console.warn('Failed to load OCR data, text selection will not be available');
-            return;
-        }
-
-        const ocrData = await response.json();
-
-        // Check if OCR data is available
-        if (!ocrData.has_ocr_data || !ocrData.words || ocrData.words.length === 0) {
-            console.log('[DEBUG] No OCR data available for this image');
-            return;
-        }
-
-        console.log(`[DEBUG] Loaded ${ocrData.words.length} words from OCR data`);
-
-        // Get text layer container
-        const textLayerDiv = document.getElementById('pdf-text-layer');
-        if (!textLayerDiv) {
-            console.error('[DEBUG] Text layer div not found');
-            return;
-        }
-
-        // Clear existing text layer
-        textLayerDiv.innerHTML = '';
-        textLayerDiv.style.display = 'block';
-
-        // Calculate scale from OCR image size to display size
-        const scaleX = canvasWidth / ocrData.image_width;
-        const scaleY = canvasHeight / ocrData.image_height;
-
-        console.log(`[DEBUG] OCR scale: ${scaleX} x ${scaleY} (OCR: ${ocrData.image_width}x${ocrData.image_height}, Display: ${canvasWidth}x${canvasHeight})`);
-
-        // Create text spans for each word
-        ocrData.words.forEach((word, index) => {
-            const span = document.createElement('span');
-            span.textContent = word.text;
-
-            // Calculate scaled position and size
-            const left = word.x * scaleX;
-            const top = word.y * scaleY;
-            const width = word.width * scaleX;
-            const height = word.height * scaleY;
-
-            // Position span absolutely over the image
-            span.style.position = 'absolute';
-            span.style.left = `${left}px`;
-            span.style.top = `${top}px`;
-            span.style.width = `${width}px`;
-            span.style.height = `${height}px`;
-
-            // Make text transparent but selectable
-            span.style.color = 'transparent';
-            span.style.fontSize = `${height}px`;
-            span.style.lineHeight = '1';
-            span.style.whiteSpace = 'nowrap';
-            span.style.overflow = 'hidden';
-            span.style.userSelect = 'text';
-            span.style.cursor = 'text';
-
-            // Debug: Show bounding boxes on hover (optional - can remove later)
-            // span.style.border = '1px solid rgba(255, 0, 0, 0.2)';
-            // span.title = `${word.text} (conf: ${word.confidence})`;
-
-            textLayerDiv.appendChild(span);
-        });
-
-        // Set text layer size to match canvas
-        textLayerDiv.style.width = `${canvasWidth}px`;
-        textLayerDiv.style.height = `${canvasHeight}px`;
-
-        console.log('[DEBUG] OCR text overlay rendered successfully');
-
-    } catch (error) {
-        console.error('[DEBUG] Error loading OCR text overlay:', error);
-        // Don't show toast - this is optional functionality
-    }
-}
-
-/**
  * Render a specific page
  */
 async function renderPage(pageNum) {
@@ -901,38 +533,36 @@ async function renderPage(pageNum) {
         // Render text layer for selection (if element exists)
         if (textLayerDiv) {
             try {
-                console.log('[DEBUG] Rendering text layer using PDF.js renderTextLayer...');
-
-                // Clear and set dimensions
-                textLayerDiv.innerHTML = '';
+                // Set text layer dimensions
                 textLayerDiv.style.width = canvas.width + 'px';
                 textLayerDiv.style.height = canvas.height + 'px';
 
-                // Set required CSS variable for PDF.js renderTextLayer
-                textLayerDiv.style.setProperty('--scale-factor', scale);
-
                 // Get text content
                 const textContent = await page.getTextContent();
-                console.log('[DEBUG] Text content items:', textContent.items.length);
+                textLayerDiv.innerHTML = ''; // Clear previous text
 
-                // Use PDF.js's official renderTextLayer utility for proper positioning
-                pdfjsLib.renderTextLayer({
-                    textContentSource: textContent,
-                    container: textLayerDiv,
-                    viewport: scaledViewport,
-                    textDivs: []
+                // Render text items
+                textContent.items.forEach(item => {
+                    const textDiv = document.createElement('span');
+                    textDiv.textContent = item.str;
+
+                    // Calculate position and size
+                    const tx = pdfjsLib.Util.transform(
+                        scaledViewport.transform,
+                        item.transform
+                    );
+
+                    textDiv.style.left = tx[4] + 'px';
+                    textDiv.style.top = (tx[5] - item.height) + 'px';
+                    textDiv.style.fontSize = (item.height * scale) + 'px';
+                    textDiv.style.fontFamily = item.fontName;
+
+                    textLayerDiv.appendChild(textDiv);
                 });
-
-                console.log('[DEBUG] Text layer rendered successfully using PDF.js renderTextLayer');
-                console.log('[DEBUG] Text layer z-index:', window.getComputedStyle(textLayerDiv).zIndex);
-                console.log('[DEBUG] Text layer pointer-events:', window.getComputedStyle(textLayerDiv).pointerEvents);
-                console.log('[DEBUG] Text layer user-select:', window.getComputedStyle(textLayerDiv).userSelect);
             } catch (textError) {
-                console.error('[DEBUG] Could not render text layer:', textError);
+                console.warn('Could not render text layer:', textError);
                 // Continue without text selection
             }
-        } else {
-            console.error('[DEBUG] Text layer div not found!');
         }
 
         // Update current page
@@ -990,30 +620,21 @@ function addTextSelectionListener() {
     // Handle text selection from PDF
     document.addEventListener('mouseup', (e) => {
         const selectedText = window.getSelection().toString().trim();
-        console.log('[DEBUG] Text selected:', selectedText);
         if (!selectedText) return;
 
         // Check if selection is from PDF area
         const pdfPanel = document.querySelector('.pdf-panel');
-        if (!pdfPanel?.contains(e.target)) {
-            console.log('[DEBUG] Selection not from PDF panel');
-            return;
-        }
-
-        console.log('[DEBUG] highlightMode:', highlightMode, 'highlightTargetField:', highlightTargetField);
+        if (!pdfPanel?.contains(e.target)) return;
 
         // Priority 1: Copy to highlight mode target field
         if (highlightMode && highlightTargetField) {
             const fieldItem = document.querySelector(`[data-field="${highlightTargetField}"]`);
             const input = fieldItem?.querySelector('.field-input');
 
-            console.log('[DEBUG] Field item found:', !!fieldItem, 'Input found:', !!input);
-
             if (input) {
                 input.value = selectedText;
                 input.focus();
                 showToast('Text copied to field', 'success');
-                console.log('[DEBUG] Text copied to field via highlight mode');
                 return;
             }
         }
@@ -1118,21 +739,6 @@ function goBack() {
     window.location.href = '/dashboard.html';
 }
 
-// Explicitly expose functions to global scope for inline onclick handlers
-window.startEditField = startEditField;
-window.saveFieldCorrection = saveFieldCorrection;
-window.cancelEditField = cancelEditField;
-window.handleFieldKeydown = handleFieldKeydown;
-window.approveDocument = approveDocument;
-window.rejectDocument = rejectDocument;
-window.goBack = goBack;
-window.openLineItemsModal = openLineItemsModal;
-window.closeLineItemsModal = closeLineItemsModal;
-window.addLineItem = addLineItem;
-window.deleteLineItem = deleteLineItem;
-window.updateLineItemField = updateLineItemField;
-window.saveLineItems = saveLineItems;
-
 /**
  * Show toast notification
  */
@@ -1150,15 +756,30 @@ function showToast(message, type = 'success') {
     toast.innerHTML = `
         <i class="fa-solid ${icon}"></i>
         <span>${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()" style="
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 0;
+            margin-left: auto;
+            font-size: 1.2rem;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">
+            <i class="fa-solid fa-times"></i>
+        </button>
     `;
 
     document.body.appendChild(toast);
 
-    // Auto-remove after 3 seconds
+    // Auto-remove after 7 seconds (increased from 3 for better usability)
     setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-out forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+        if (toast.parentElement) {  // Check if not already manually closed
+            toast.style.animation = 'slideOut 0.3s ease-out forwards';
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 7000);
 }
 
 // Add slideOut animation
@@ -1218,75 +839,13 @@ function renderLineItemsEditor() {
         return;
     }
 
-    let fields = [];
+    // Get all unique field names from all line items
+    const allFields = new Set();
+    editingLineItems.forEach(item => {
+        Object.keys(item).forEach(key => allFields.add(key));
+    });
 
-    // If DocuWare is configured, use those fields as the base
-    // Otherwise, get fields from existing line items
-    if (connectorConfig?.docuware?.selected_table_columns) {
-        const selectedTableColumns = connectorConfig.docuware.selected_table_columns;
-        // Get the first table's columns (assuming single table)
-        const tableNames = Object.keys(selectedTableColumns);
-
-        if (tableNames.length > 0) {
-            const selectedColumns = selectedTableColumns[tableNames[0]];
-
-            // Extract labels from column objects (they're {name, label, type})
-            const columnLabels = selectedColumns.map(col => {
-                if (typeof col === 'object' && col.label) {
-                    return col.label;
-                }
-                return col; // Fallback if it's already a string
-            });
-
-            // Create field name mapping (DocuWare names -> PRIMARY field name)
-            // Only map to ONE field per column to avoid duplicates
-            const fieldMapping = {
-                'item number': 'sku',
-                'item_number': 'sku',
-                'description': 'description',
-                'qty': 'quantity',
-                'quantity': 'quantity',
-                'rate': 'unit_price',
-                'unit_price': 'unit_price',
-                'unit price': 'unit_price',
-                'amount': 'amount',
-                'unit': 'unit',
-                'tax': 'tax',
-                'discount': 'discount',
-                'customer': 'customer',
-                'taxable': 'taxable',
-                'item_id': 'item_id',
-                'pack_size': 'pack_size',
-                'pack size': 'pack_size',
-                'total': 'total',
-                'price': 'unit_price',
-                'item no': 'sku',
-                'item_no': 'sku',
-                'product_name': 'description',
-                'product name': 'description'
-            };
-
-            // Build list of allowed field names based on selected columns
-            // Use only the PRIMARY field for each column (no duplicates)
-            const allowedFields = new Set();
-            columnLabels.forEach(col => {
-                const colLower = col.toLowerCase().trim(); // Trim whitespace
-                // Map to primary field name
-                const primaryField = fieldMapping[colLower] || colLower;
-                allowedFields.add(primaryField);
-            });
-
-            // Build fields array from DocuWare configuration
-            fields = Array.from(allowedFields);
-        }
-    } else {
-        // No DocuWare config - get fields from existing line items
-        const allFields = new Set();
-        editingLineItems.forEach(item => {
-            Object.keys(item).forEach(key => allFields.add(key));
-        });
-        fields = Array.from(allFields);
-    }
+    const fields = Array.from(allFields);
 
     let html = '';
 
@@ -1305,27 +864,7 @@ function renderLineItemsEditor() {
         `;
 
         fields.forEach(field => {
-            // Try to find the value using multiple field name variations
-            let value = '';
-            const fieldVariations = {
-                'quantity': ['quantity', 'qty'],
-                'qty': ['qty', 'quantity'],
-                'unit_price': ['unit_price', 'rate', 'price'],
-                'sku': ['sku', 'item_number', 'item_code'],
-                'description': ['description', 'item_description'],
-                'pack_size': ['pack_size', 'pack size'],
-                'total': ['total', 'amount']
-            };
-
-            // Check all variations for this field
-            const variations = fieldVariations[field] || [field];
-            for (const variation of variations) {
-                if (item[variation] !== undefined && item[variation] !== null && item[variation] !== '') {
-                    value = item[variation];
-                    break;
-                }
-            }
-
+            const value = item[field] || '';
             const displayName = field.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
             html += `
@@ -1365,31 +904,12 @@ function addLineItem() {
             newItem[key] = '';
         });
     } else {
-        // Check if we have DocuWare table columns configured
-        if (connectorConfig?.docuware?.selected_table_columns) {
-            const selectedTableColumns = connectorConfig.docuware.selected_table_columns;
-            const tableNames = Object.keys(selectedTableColumns);
-
-            if (tableNames.length > 0) {
-                const selectedColumns = selectedTableColumns[tableNames[0]];
-                // Create fields based on selected columns
-                selectedColumns.forEach(col => {
-                    newItem[col.toLowerCase()] = '';
-                });
-            } else {
-                // Fallback to default fields
-                newItem.description = '';
-                newItem.quantity = '';
-                newItem.unit_price = '';
-                newItem.amount = '';
-            }
-        } else {
-            // Default fields for new line item (no DocuWare config)
-            newItem.description = '';
-            newItem.quantity = '';
-            newItem.unit_price = '';
-            newItem.amount = '';
-        }
+        // Default fields for new line item
+        newItem.description = '';
+        newItem.quantity = '';
+        newItem.unit = '';
+        newItem.unit_price = '';
+        newItem.amount = '';
     }
 
     editingLineItems.push(newItem);

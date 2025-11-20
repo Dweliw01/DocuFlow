@@ -478,11 +478,38 @@ function renderDocumentCard(doc, docId) {
                         ${(doc.confidence * 100).toFixed(0)}%
                     </span>
                     ${doc.id ? `
-                        <button class="btn-review" onclick="event.stopPropagation(); reviewDocument(${doc.id})" title="Review & Edit Document">
-                            <i class="fa-solid fa-file-pen"></i> Review
+                        <button onclick="event.stopPropagation(); window.location.href='pdf-viewer.html?id=${doc.id}'" style="
+                            background: #3b82f6;
+                            color: white;
+                            border: none;
+                            padding: 0.375rem 0.75rem;
+                            border-radius: 6px;
+                            font-weight: 600;
+                            font-size: 0.875rem;
+                            cursor: pointer;
+                            transition: background 0.2s;
+                            white-space: nowrap;
+                        " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
+                            Review
+                            <i class="fa-solid fa-arrow-right" style="margin-left: 0.25rem;"></i>
                         </button>
-                        <button class="btn-delete-doc" onclick="event.stopPropagation(); deleteDocument(${doc.id}, '${doc.filename}')" title="Delete Document">
-                            <i class="fa-solid fa-xmark"></i>
+                        <button onclick="event.stopPropagation(); dismissDocument(${doc.id})" style="
+                            background: #ef4444;
+                            color: white;
+                            border: none;
+                            padding: 0.375rem;
+                            border-radius: 6px;
+                            font-weight: 600;
+                            font-size: 0.875rem;
+                            cursor: pointer;
+                            transition: background 0.2s;
+                            width: 32px;
+                            height: 32px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        " onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'" title="Dismiss">
+                            <i class="fa-solid fa-times"></i>
                         </button>
                     ` : ''}
                 </div>
@@ -651,14 +678,17 @@ function renderExtractedDataCard(doc, docId) {
                     </div>
                 </div>
             ` : ''}
-            ${data.other_data && Object.keys(data.other_data).length > 0 ? `
+            ${data.other_data && Object.keys(data.other_data).length > 0 && doc.connector_type && doc.connector_type !== 'none' ? `
                 <div class="data-section-card">
-                    <div class="data-section-header">Additional Details</div>
+                    <div class="data-section-header">
+                        <i class="fa-solid ${doc.connector_type === 'docuware' ? 'fa-database' : doc.connector_type === 'google_drive' ? 'fa-brands fa-google-drive' : 'fa-cloud'}"></i>
+                        ${doc.connector_type === 'docuware' ? 'DocuWare Fields' : doc.connector_type === 'google_drive' ? 'Google Drive Fields' : 'Connector Fields'}
+                    </div>
                     <div class="data-items-compact">
-                        ${Object.entries(data.other_data).slice(0, 5).map(([key, value]) => `
+                        ${Object.entries(data.other_data).map(([key, value]) => `
                             <div class="data-item-compact">
                                 <span class="data-label-compact">${key.replace(/_/g, ' ')}:</span>
-                                <span class="data-value-compact">${value}</span>
+                                <span class="data-value-compact">${value || '-'}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -1256,6 +1286,36 @@ async function loadRecentActivity() {
 }
 
 /**
+ * Dismiss a document from the review queue
+ */
+window.dismissDocument = async function(docId) {
+    if (!confirm('Are you sure you want to dismiss this document? It will be removed from your review queue.')) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`/api/documents/${docId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to dismiss document');
+        }
+
+        // Refresh pending documents and stats
+        await loadPendingDocuments();
+        await loadStatsOverview();
+        await loadRecentActivity();
+
+        console.log(`[Dashboard] Document ${docId} dismissed successfully`);
+
+    } catch (error) {
+        console.error('[Dashboard] Error dismissing document:', error);
+        alert('Failed to dismiss document: ' + error.message);
+    }
+};
+
+/**
  * Load pending review documents
  */
 async function loadPendingDocuments() {
@@ -1338,7 +1398,7 @@ async function loadPendingDocuments() {
                             ">
                                 <i class="fa-solid ${confidenceIcon}"></i> ${confidence}%
                             </div>
-                            <button style="
+                            <button onclick="event.stopPropagation(); window.location.href='pdf-viewer.html?id=${doc.id}'" style="
                                 background: #3b82f6;
                                 color: white;
                                 border: none;
@@ -1351,6 +1411,24 @@ async function loadPendingDocuments() {
                             " onmouseover="this.style.background='#2563eb'" onmouseout="this.style.background='#3b82f6'">
                                 Review
                                 <i class="fa-solid fa-arrow-right" style="margin-left: 0.5rem;"></i>
+                            </button>
+                            <button onclick="event.stopPropagation(); dismissDocument(${doc.id})" style="
+                                background: #ef4444;
+                                color: white;
+                                border: none;
+                                padding: 0.5rem;
+                                border-radius: 6px;
+                                font-weight: 600;
+                                font-size: 0.875rem;
+                                cursor: pointer;
+                                transition: background 0.2s;
+                                width: 36px;
+                                height: 36px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            " onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'" title="Dismiss">
+                                <i class="fa-solid fa-times"></i>
                             </button>
                         </div>
                     </div>

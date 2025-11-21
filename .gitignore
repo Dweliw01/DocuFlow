@@ -49,6 +49,26 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+backend/test_storage/
+test_docuflow.db
+.pytest/
 
 # Logs
 *.log
+
+# Windows artifacts
+NUL
+
+# Database files (SQLite for development)
+*.db
+*.db-shm
+*.db-wal
+*.db.backup*
+docuflow.db*
+
+# Backend storage (development files)
+backend/storage/
+
+# Test files at root
+/test_*.py
+/test_storage/

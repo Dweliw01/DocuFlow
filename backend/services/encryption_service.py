@@ -28,11 +28,13 @@ class EncryptionService:
         Returns:
             Fernet cipher instance
         """
-        # Try to load key from environment
-        key = os.getenv('ENCRYPTION_KEY')
+        from config import settings
+
+        # Try to load key from settings
+        key = settings.encryption_key
 
         if key:
-            # Use existing key from environment
+            # Use existing key from settings
             try:
                 return Fernet(key.encode())
             except Exception as e:

@@ -3,184 +3,755 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DocuFlow - AI Document Processing</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>DocuFlow - AI-Powered Document Processing for Modern Teams</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* ===== Design System ===== */
+        :root {
+            --primary-600: #0066cc;
+            --primary-700: #0052a3;
+
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        /* ===== Base ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            color: var(--gray-900);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            background: white;
+        }
+
+        /* ===== Header ===== */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .header-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: #0066cc;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-link {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-size: 0.9375rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-link:hover {
+            color: var(--gray-900);
+        }
+
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 0.5rem;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-600);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-700);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--gray-700);
+            border: 1px solid var(--gray-300);
+        }
+
+        .btn-secondary:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-400);
+        }
+
+        /* ===== Hero ===== */
+        .hero {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--gray-100);
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--gray-700);
+            margin-bottom: 2rem;
+        }
+
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-600) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--gray-600);
+            max-width: 700px;
+            margin: 0 auto 2.5rem;
+            line-height: 1.6;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 3rem;
+        }
+
+        .btn-large {
+            padding: 1rem 2rem;
+            font-size: 1.0625rem;
+        }
+
+        .hero-note {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+        }
+
+        /* ===== Features ===== */
+        .features {
+            background: var(--gray-50);
+            padding: 5rem 2rem;
+        }
+
+        .features-container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--gray-900);
+        }
+
+        .section-subtitle {
+            font-size: 1.125rem;
+            color: var(--gray-600);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid var(--gray-200);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: #0066cc;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .feature-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--gray-900);
+        }
+
+        .feature-description {
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+
+        /* ===== Pricing ===== */
+        .pricing {
+            padding: 5rem 2rem;
+        }
+
+        .pricing-container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .pricing-card {
+            background: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            border: 2px solid var(--gray-200);
+            position: relative;
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary-600);
+            box-shadow: 0 20px 25px -5px rgba(0, 102, 204, 0.1);
+        }
+
+        .pricing-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--primary-600);
+            color: white;
+            padding: 0.25rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .pricing-name {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--gray-900);
+        }
+
+        .pricing-description {
+            font-size: 0.9375rem;
+            color: var(--gray-600);
+            margin-bottom: 1.5rem;
+        }
+
+        .pricing-price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+        }
+
+        .pricing-price span {
+            font-size: 1.125rem;
+            font-weight: 400;
+            color: var(--gray-600);
+        }
+
+        .pricing-features {
+            list-style: none;
+            margin: 2rem 0;
+        }
+
+        .pricing-features li {
+            padding: 0.75rem 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            color: var(--gray-700);
+            font-size: 0.9375rem;
+        }
+
+        .pricing-features svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--primary-600);
+            stroke-width: 2;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* ===== Footer ===== */
+        .footer {
+            background: var(--gray-900);
+            color: var(--gray-400);
+            padding: 3rem 2rem;
+        }
+
+        .footer-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .footer-logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .footer-text {
+            font-size: 0.9375rem;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 1024px) {
+            .pricing-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-title {
+                font-size: 2.5rem;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .hero {
+                padding: 3rem 1.5rem;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+            }
+
+            .btn-large {
+                width: 100%;
+            }
+
+            .nav {
+                display: none;
+            }
+        }
+    </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-brand">
-                <svg class="brand-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
-                    <rect width="32" height="32" rx="8" fill="url(#gradient)"/>
-                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    <defs>
-                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
-                            <stop offset="0%" stop-color="#6366f1"/>
-                            <stop offset="100%" stop-color="#8b5cf6"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <span class="brand-name">DocuFlow</span>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M4 6h16M4 12h16M4 18h12" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span>DocuFlow</span>
+            </a>
+            <nav class="nav">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="/login.html" class="btn btn-secondary">Sign In</a>
+                <a href="/login.html" class="btn btn-primary">Start Free Trial</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1 class="hero-title">
+            AI-Powered Document<br>Processing
+        </h1>
+
+        <p class="hero-subtitle">
+            Automatically categorize, extract data, and organize your documents with enterprise-grade AI.
+            Save hours of manual work and eliminate data entry errors.
+        </p>
+
+        <div class="hero-cta">
+            <a href="/login.html" class="btn btn-primary btn-large">
+                Start Free Trial
+            </a>
+            <a href="#features" class="btn btn-secondary btn-large">
+                See How It Works
+            </a>
+        </div>
+
+        <p class="hero-note">
+            No credit card required • 50 documents free • Setup in 2 minutes
+        </p>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <div class="features-container">
+            <div class="section-header">
+                <h2 class="section-title">Everything you need to process documents at scale</h2>
+                <p class="section-subtitle">
+                    Built for teams who want to automate document workflows without sacrificing accuracy
+                </p>
             </div>
-            <div class="nav-links">
-                <a href="/" class="nav-link nav-link-active">Process Documents</a>
-                <a href="/settings.html" class="nav-link">Settings</a>
-                <span class="nav-status">
-                    <span class="status-dot"></span>
-                    System Online
-                </span>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            <path d="M9 12h6m-6 4h6"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Intelligent Categorization</h3>
+                    <p class="feature-description">
+                        Automatically classify invoices, contracts, receipts, and legal documents with AI-powered categorization. 95%+ accuracy out of the box.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M9 3v18"/>
+                            <path d="M15 3v18"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Structured Data Extraction</h3>
+                    <p class="feature-description">
+                        Extract dates, amounts, vendor information, line items, and custom fields from any document. No training required.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Seamless Integrations</h3>
+                    <p class="feature-description">
+                        Connect to DocuWare, Google Drive, OneDrive, and more. Organize documents automatically with smart folder structures.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Batch Processing</h3>
+                    <p class="feature-description">
+                        Process up to 100 documents at once. Perfect for end-of-month reconciliations, bulk imports, or historical data migration.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Enterprise Security</h3>
+                    <p class="feature-description">
+                        SOC 2 compliant infrastructure. Your documents are encrypted at rest and in transit. GDPR and HIPAA ready.
+                    </p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg viewBox="0 0 24 24">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3 class="feature-title">Real-time Analytics</h3>
+                    <p class="feature-description">
+                        Track processing metrics, document volumes, and costs in real-time. Export data for custom reporting and auditing.
+                    </p>
+                </div>
             </div>
         </div>
-    </nav>
+    </section>
 
-    <div class="app-container">
-        <!-- Hero Section -->
-        <section class="hero">
-            <div class="hero-content">
-                <h1 class="hero-title">AI-Powered Document Processing</h1>
-                <p class="hero-subtitle">Upload your documents and let our AI organize them automatically with advanced OCR and intelligent data extraction</p>
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="pricing-container">
+            <div class="section-header">
+                <h2 class="section-title">Simple, transparent pricing</h2>
+                <p class="section-subtitle">
+                    Start free. Scale as you grow. No hidden fees or commitments.
+                </p>
             </div>
-        </section>
 
-        <!-- Upload Section -->
-        <section class="upload-section" id="uploadSection">
-            <div class="section-container">
-                <div class="upload-zone" id="uploadBox">
-                    <div class="upload-zone-content">
-                        <div class="upload-icon-wrapper">
-                            <svg class="upload-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
-                                <circle cx="32" cy="32" r="30" fill="#f0f4ff" stroke="#6366f1" stroke-width="2" stroke-dasharray="4 4"/>
-                                <path d="M32 20v24M20 32h24" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
-                                <path d="M26 26l6-6 6 6" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <div class="pricing-grid">
+                <!-- Free Trial -->
+                <div class="pricing-card">
+                    <div class="pricing-name">Trial</div>
+                    <div class="pricing-description">Perfect for testing</div>
+                    <div class="pricing-price">
+                        Free
+                        <span>14 days</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                        </div>
-                        <h3 class="upload-title">Drop your PDF files here</h3>
-                        <p class="upload-description">or click to browse from your computer</p>
-                        <div class="upload-specs">
-                            <span class="spec-item">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                </svg>
-                                PDF files only
-                            </span>
-                            <span class="spec-item">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                </svg>
-                                Max 50MB per file
-                            </span>
-                            <span class="spec-item">
-                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-                                </svg>
-                                Up to 100 files
-                            </span>
-                        </div>
-                        <input type="file" id="fileInput" multiple accept=".pdf" hidden>
-                        <button id="browseBtn" class="btn btn-primary btn-lg">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M16.88 9.94L11 4.06a1 1 0 00-1.41 0L4 9.94a1 1 0 001.41 1.41L9 7.77V16a1 1 0 002 0V7.77l3.47 3.58a1 1 0 001.41-1.41z"/>
+                            <span>50 documents</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
                             </svg>
-                            Browse Files
-                        </button>
-                    </div>
+                            <span>AI-powered processing</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>All integrations</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>No credit card required</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Start Free Trial</a>
                 </div>
 
-                <!-- Selected Files -->
-                <div id="fileList" class="file-list hidden"></div>
+                <!-- Starter (Featured) -->
+                <div class="pricing-card featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <div class="pricing-name">Starter</div>
+                    <div class="pricing-description">Small businesses</div>
+                    <div class="pricing-price">
+                        $29
+                        <span>/ month</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>500 documents/month</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>AI-powered processing</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>All integrations</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Email support</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-primary" style="width: 100%;">Get Started</a>
+                </div>
 
-                <!-- Upload Actions -->
-                <div id="uploadControls" class="upload-actions hidden">
-                    <button id="uploadBtn" class="btn btn-primary btn-xl">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
-                        </svg>
-                        Process Documents
-                    </button>
-                    <button id="clearBtn" class="btn btn-secondary">Clear All</button>
+                <!-- Professional -->
+                <div class="pricing-card">
+                    <div class="pricing-name">Professional</div>
+                    <div class="pricing-description">Mid-market</div>
+                    <div class="pricing-price">
+                        $99
+                        <span>/ month</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>2,500 documents/month</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>AI-powered processing</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Custom field mappings</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Priority support</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Get Started</a>
+                </div>
+
+                <!-- Enterprise -->
+                <div class="pricing-card">
+                    <div class="pricing-name">Enterprise</div>
+                    <div class="pricing-description">Large organizations</div>
+                    <div class="pricing-price">
+                        $299
+                        <span>/ month</span>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>10,000 documents/month</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Custom AI training</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Custom field mappings</span>
+                        </li>
+                        <li>
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Dedicated support</span>
+                        </li>
+                    </ul>
+                    <a href="/login.html" class="btn btn-secondary" style="width: 100%;">Get Started</a>
                 </div>
             </div>
-        </section>
-
-        <!-- Processing Section -->
-        <section id="processingSection" class="processing-section hidden">
-            <div class="section-container">
-                <div class="processing-card">
-                    <div class="processing-header">
-                        <div class="spinner"></div>
-                        <h2>Processing Your Documents</h2>
-                        <p id="processingStatus">Initializing AI engine...</p>
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-bar">
-                            <div id="progressFill" class="progress-fill"></div>
-                        </div>
-                    </div>
-                    <div id="processingDetails" class="processing-log"></div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Results Section -->
-        <section id="resultsSection" class="results-section hidden">
-            <div class="section-container">
-                <div class="results-header">
-                    <div class="results-icon">
-                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                            <circle cx="24" cy="24" r="24" fill="#d1fae5"/>
-                            <path d="M14 24l8 8 16-16" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                    <h2 class="results-title">Processing Complete</h2>
-                    <p class="results-subtitle">Your documents have been organized and data has been extracted</p>
-                </div>
-
-                <!-- Summary Stats -->
-                <div id="resultsSummary" class="stats-grid"></div>
-
-                <!-- Results -->
-                <div id="resultsDetails" class="results-content"></div>
-
-                <!-- Actions -->
-                <div class="results-actions">
-                    <button id="downloadBtn" class="btn btn-primary btn-xl">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/>
-                        </svg>
-                        Download Organized Documents
-                    </button>
-                    <button id="newBatchBtn" class="btn btn-secondary">Process New Batch</button>
-                </div>
-            </div>
-        </section>
-    </div>
+        </div>
+    </section>
 
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-container">
-            <div class="footer-brand">
-                <svg class="footer-icon" width="24" height="24" viewBox="0 0 32 32" fill="none">
-                    <rect width="32" height="32" rx="8" fill="url(#gradient2)"/>
-                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    <defs>
-                        <linearGradient id="gradient2" x1="0" y1="0" x2="32" y2="32">
-                            <stop offset="0%" stop-color="#6366f1"/>
-                            <stop offset="100%" stop-color="#8b5cf6"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <span>DocuFlow</span>
+            <div class="footer-logo">
+                <i class="fa-solid fa-file-lines" style="color: #0066cc; margin-right: 0.5rem;"></i>
+                DocuFlow
             </div>
-            <div class="footer-text">
-                Powered by Claude AI & Tesseract OCR • Secure • Fast • Reliable
-            </div>
+            <p class="footer-text">
+                © 2025 DocuFlow. All rights reserved. AI-powered document processing for modern teams.
+            </p>
         </div>
     </footer>
-
-    <script src="app.js?v=6"></script>
 </body>
 </html>

@@ -6,11 +6,14 @@ from anthropic import Anthropic
 from typing import Tuple, Optional
 import json
 import sys
+import logging
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from models import DocumentCategory, ExtractedData
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -23,41 +26,87 @@ class AIService:
         """Initialize the AI service with Claude."""
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self.model = settings.claude_model
-        print(f"[OK] AI Service initialized with {self.model}")
+        logger.info(f"[OK] AI Service initialized with {self.model}")
 
-    async def categorize_document(self, text: str, filename: str, selected_fields: Optional[list] = None) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+    async def categorize_document(
+        self,
+        text: str,
+        filename: str,
+        selected_fields: Optional[list] = None,
+        selected_table_columns: Optional[dict] = None,
+        organization_id: Optional[int] = None
+    ) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
         """
         Categorize document using AI and extract structured data.
 
         Args:
             text: Extracted text from the document
             filename: Original filename (provides additional context)
-            selected_fields: Optional list of field names for context-aware extraction
+            selected_fields: Optional list of DocuWare field names to extract (if provided, uses dynamic extraction)
+            selected_table_columns: Optional dict of table field names -> column definitions
+            organization_id: Optional organization ID for few-shot learning (Phase 3)
 
         Returns:
             Tuple of (DocumentCategory, confidence_score, extracted_data)
             Example: (DocumentCategory.INVOICE, 0.95, ExtractedData(...))
         """
-        # Build context-aware prompt if fields are provided
-        if selected_fields:
-            cabinet_type = self._detect_cabinet_type(selected_fields)
-            prompt = self._build_context_aware_prompt(text, filename, selected_fields, cabinet_type)
+        # DEBUG: Log what table columns we're receiving
+        logger.info(f"[AI EXTRACTION DEBUG] selected_table_columns type: {type(selected_table_columns)}")
+        logger.info(f"[AI EXTRACTION DEBUG] selected_table_columns value: {selected_table_columns}")
+        if selected_table_columns:
+            logger.info(f"[AI EXTRACTION DEBUG] Table columns provided: {list(selected_table_columns.keys())}")
         else:
-            prompt = self._build_categorization_prompt(text, filename)
+            logger.warning(f"[AI EXTRACTION DEBUG] NO TABLE COLUMNS PROVIDED!")
+
+        # Build few-shot examples if feature is enabled
+        few_shot_examples = ""
+        if settings.enable_few_shot_learning and organization_id:
+            try:
+                from services.ai_learning_service import get_ai_learning_service
+                learning_service = get_ai_learning_service()
+                examples = learning_service.get_few_shot_examples(
+                    organization_id=organization_id,
+                    selected_fields=selected_fields,
+                    limit=3
+                )
+                few_shot_examples = learning_service.format_few_shot_examples(examples)
+                if few_shot_examples:
+                    logger.info(f"[FEW-SHOT] Injecting {len(examples)} examples into prompt")
+            except Exception as e:
+                logger.warning(f"[FEW-SHOT] Failed to get examples: {e}")
+                # Continue without few-shot examples rather than failing
+
+        if selected_fields:
+            # Use dynamic field extraction based on DocuWare fields
+            prompt = self._build_dynamic_extraction_prompt(text, filename, selected_fields, selected_table_columns, few_shot_examples)
+        else:
+            # Use default extraction
+            prompt = self._build_categorization_prompt(text, filename, few_shot_examples)
 
         try:
             response = await self._categorize_claude(prompt)
-            return self._parse_categorization_response(response)
+            if selected_fields:
+                return self._parse_dynamic_extraction_response(response, selected_fields)
+            else:
+                return self._parse_categorization_response(response)
 
         except Exception as e:
-            print(f"AI categorization failed: {e}")
+            logger.error(f"AI categorization failed: {e}")
             # Fallback: return "Other" with low confidence and no extracted data
             return DocumentCategory.OTHER, 0.3, None
 
-    def _build_categorization_prompt(self, text: str, filename: str) -> str:
+    def _build_categorization_prompt(self, text: str, filename: str, few_shot_examples: str = "") -> str:
         """
         Build the categorization prompt for Claude.
         Includes clear instructions for categorization AND structured data extraction.
+
+        Args:
+            text: Document text
+            filename: Document filename
+            few_shot_examples: Optional few-shot examples from correction history
+
+        Returns:
+            Prompt string
         """
         # Truncate text if too long (to save on API costs and stay within context limits)
         max_chars = 4000
@@ -66,7 +115,10 @@ class AIService:
 
         categories_list = ", ".join([cat.value for cat in DocumentCategory])
 
-        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract structured data.
+        # Inject few-shot examples if provided
+        few_shot_section = few_shot_examples if few_shot_examples else ""
+
+        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract structured data.{few_shot_section}
 
 FILENAME: {filename}
 
@@ -177,7 +229,7 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         """
         message = self.client.messages.create(
             model=self.model,
-            max_tokens=2500,  # Increased to handle line items extraction (invoices can have many items)
+            max_tokens=4096,  # Increased to 4096 to handle many line items (invoices can have 50+ items)
             temperature=0.1,  # Low temperature for consistent, focused results
             messages=[
                 {"role": "user", "content": prompt}
@@ -227,14 +279,14 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
                 try:
                     extracted_data = ExtractedData(**data["extracted_data"])
                 except Exception as e:
-                    print(f"Failed to parse extracted_data: {e}")
+                    logger.warning(f"Failed to parse extracted_data: {e}")
                     # Continue without extracted data rather than failing completely
 
             return category, confidence, extracted_data
 
         except Exception as e:
-            print(f"Failed to parse AI response: {e}")
-            print(f"Response was: {response}")
+            logger.error(f"Failed to parse AI response: {e}")
+            logger.debug(f"Response was: {response}")
             # Return safe fallback
             return DocumentCategory.OTHER, 0.3, None
 
@@ -277,78 +329,16 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         # Default to OTHER if no match
         return DocumentCategory.OTHER
 
-    def _detect_cabinet_type(self, selected_fields: list) -> str:
+    def _build_dynamic_extraction_prompt(self, text: str, filename: str, selected_fields: list, selected_table_columns: Optional[dict] = None, few_shot_examples: str = "") -> str:
         """
-        Detect cabinet type based on selected field names.
-
-        Args:
-            selected_fields: List of field names selected by user
-
-        Returns:
-            Cabinet type string: 'HR', 'AP', 'AR', 'Sales', 'Legal', 'General'
-        """
-        # Convert all field names to uppercase for matching
-        fields_upper = [field.upper() for field in selected_fields]
-        fields_str = ' '.join(fields_upper)
-
-        # HR indicators
-        hr_keywords = ['EMPLOYEE', 'HIRE', 'SALARY', 'WAGE', 'DEPARTMENT', 'POSITION',
-                       'TITLE', 'MANAGER', 'PERFORMANCE', 'REVIEW', 'TERMINATION',
-                       'ONBOARD', 'BENEFIT', 'LEAVE', 'VACATION', 'SICK', 'PTO',
-                       'PERSONNEL', 'STAFF', 'WORKER', 'JOB', 'EMPLOYMENT']
-        hr_score = sum(1 for keyword in hr_keywords if keyword in fields_str)
-
-        # AP (Accounts Payable) indicators
-        ap_keywords = ['VENDOR', 'SUPPLIER', 'INVOICE', 'BILL', 'PAYMENT', 'DUE_DATE',
-                       'AMOUNT', 'PO_NUMBER', 'PURCHASE', 'ORDER', 'PAYABLE', 'EXPENSE',
-                       'COST', 'TOTAL', 'TAX', 'RECEIPT', 'PAID']
-        ap_score = sum(1 for keyword in ap_keywords if keyword in fields_str)
-
-        # AR (Accounts Receivable) indicators
-        ar_keywords = ['CUSTOMER', 'CLIENT', 'RECEIVABLE', 'REVENUE', 'SALES',
-                       'COLLECTION', 'AGING', 'CREDIT', 'DEBIT']
-        ar_score = sum(1 for keyword in ar_keywords if keyword in fields_str)
-
-        # Sales indicators
-        sales_keywords = ['DEAL', 'OPPORTUNITY', 'QUOTE', 'PROPOSAL', 'CONTRACT',
-                         'COMMISSION', 'TERRITORY', 'PIPELINE', 'FORECAST',
-                         'LEAD', 'PROSPECT']
-        sales_score = sum(1 for keyword in sales_keywords if keyword in fields_str)
-
-        # Legal indicators
-        legal_keywords = ['CONTRACT', 'AGREEMENT', 'LEGAL', 'CLAUSE', 'TERM',
-                         'PARTY', 'SIGNATORY', 'JURISDICTION', 'LIABILITY',
-                         'INDEMNITY', 'CONFIDENTIAL', 'NDA']
-        legal_score = sum(1 for keyword in legal_keywords if keyword in fields_str)
-
-        # Determine cabinet type based on highest score
-        scores = {
-            'HR': hr_score,
-            'AP': ap_score,
-            'AR': ar_score,
-            'Sales': sales_score,
-            'Legal': legal_score
-        }
-
-        # Get the type with highest score
-        max_score = max(scores.values())
-        if max_score >= 2:  # Need at least 2 matching keywords
-            cabinet_type = max(scores, key=scores.get)
-            print(f"Detected cabinet type: {cabinet_type} (score: {max_score})")
-            return cabinet_type
-
-        print("Detected cabinet type: General (no strong indicators)")
-        return 'General'
-
-    def _build_context_aware_prompt(self, text: str, filename: str, selected_fields: list, cabinet_type: str) -> str:
-        """
-        Build a context-aware prompt based on cabinet type and selected fields.
+        Build a dynamic prompt that extracts specific DocuWare fields.
 
         Args:
             text: Document text
             filename: Original filename
-            selected_fields: List of field names to extract
-            cabinet_type: Detected cabinet type (HR, AP, AR, Sales, Legal, General)
+            selected_fields: List of DocuWare field names to extract
+            selected_table_columns: Optional dict of table field names -> column definitions
+            few_shot_examples: Optional few-shot examples from correction history
 
         Returns:
             Prompt string for Claude
@@ -361,103 +351,228 @@ DO NOT include markdown code blocks or any other formatting. Output only the JSO
         categories_list = ", ".join([cat.value for cat in DocumentCategory])
         fields_list = ", ".join(selected_fields)
 
-        # Build context-specific guidance based on cabinet type
-        context_guidance = self._get_context_guidance(cabinet_type)
+        # Debug logging
+        logger.debug(f"AI Extraction - Requested fields: {selected_fields}")
 
-        return f"""You are a document classification and data extraction expert specializing in {cabinet_type} documents. Analyze the following document, categorize it, and extract specific fields.
+        # Inject few-shot examples if provided
+        few_shot_section = few_shot_examples if few_shot_examples else ""
+
+        # Build line item extraction instructions if table columns are selected
+        line_items_instruction = ""
+        if selected_table_columns:
+            logger.debug(f"Building prompt with table columns: {selected_table_columns}")
+            for table_name, columns in selected_table_columns.items():
+                column_names = [col['label'] for col in columns]
+                column_list = ", ".join(column_names)
+                logger.debug(f"Table field '{table_name}' has columns: {column_list}")
+                line_items_instruction = f"""
+7. CRITICAL LINE ITEM EXTRACTION (MANDATORY):
+   This document contains a table with line items. You MUST extract ALL line items from this document.
+   Expected columns: {column_list}
+
+   IMPORTANT: Even if this document looks like correspondence or another category, if you see a table with
+   products/items listed, you MUST extract them as line_items.
+
+   For EACH line item row in the table, extract:
+   - description: Product/service description
+   - quantity: Quantity ordered/shipped
+   - unit: Unit of measure (EA, boxes, hours, etc.)
+   - unit_price: Price per unit
+   - amount: Line total
+   - sku: Product/SKU/item code (if present)
+
+   Extract EVERY line item from the document. Do not skip any items.
+   If the document has a table with items, populate the "line_items" array in your response."""
+        else:
+            logger.debug("No table columns selected, using default line item extraction")
+            line_items_instruction = """
+7. If this is an invoice or receipt with line items, extract ALL line items with:
+   - description: Product/service description
+   - quantity: Quantity ordered
+   - unit_price: Price per unit
+   - amount: Line total"""
+
+        return f"""You are a document classification and data extraction expert. Analyze the following document, categorize it, and extract specific fields.{few_shot_section}
 
 FILENAME: {filename}
 
 DOCUMENT TEXT:
 {text}
 
-CONTEXT: This document is being filed in a {cabinet_type} cabinet. {context_guidance}
-
 INSTRUCTIONS:
 1. Categorize this document into ONE of the following categories:
    {categories_list}
 
+   IMPORTANT CATEGORIZATION RULES:
+   - If the document has a TABLE with line items (products/services with quantities/amounts), it is likely an "Invoice" or business document, NOT "Correspondence"
+   - If the document has vendor/supplier and customer information with line items, categorize as "Invoice"
+   - If the document has a purchase order number (P.O., PO#) and line items, categorize as "Invoice"
+   - If the document has a total amount or invoice number, categorize as "Invoice"
+   - Only categorize as "Correspondence" if it's truly a letter, email, or memo WITHOUT transactional line items
+   - Purchase orders with line item tables should be categorized as "Invoice" (they're transactional documents)
+
 2. Provide a confidence score between 0.0 and 1.0
 
-3. Extract ONLY the following fields from the document:
+3. Extract the following SPECIFIC FIELDS from the document:
    {fields_list}
 
-4. Extraction guidelines:
-   - Extract ONLY the fields listed above - do not extract fields not in this list
-   - If a field name suggests a date (e.g., contains DATE), use YYYY-MM-DD format
-   - If a field name suggests an amount/number (e.g., AMOUNT, SALARY, TOTAL), extract as plain number with decimals (e.g., "25000.50")
-   - If a field is not present in the document, set it to null
-   - Extract information exactly as it appears - do not invent or infer data
+4. CRITICAL: Use the EXACT field names provided above, including any typos, underscores, or unusual formatting
+   - DO NOT fix typos or normalize field names
+   - DO NOT remove trailing underscores
+   - The field names must match EXACTLY as shown above
+   - Example: If the field is "INVOCE_NO_", output "INVOCE_NO_" not "INVOICE_NO"
+   - Example: If the field is "ZIP_", output "ZIP_" not "ZIP"
 
-5. Field interpretation hints (based on {cabinet_type} context):
-{self._get_field_hints(cabinet_type)}
+5. For each field value:
+   - Look for the information that best matches the field name
+   - If the field name suggests a date (e.g., ORDER_DATE, DUE_DATE, SHIP_DATE), extract in YYYY-MM-DD format
+   - If the field suggests an amount (e.g., AMOUNT, TOTAL, PRICE), include currency symbol
+   - If the field is not present in the document, set it to null
+   - Extract EXACTLY what appears on the document, don't invent data
+   - CRITICAL: For INVOICE fields, look for ANY document identifier, reference number, or order number
 
-6. Respond ONLY with valid JSON in this exact format (no markdown, no other text):
+6. Field name hints (but remember to use EXACT field names from instruction 3):
+   - VENDOR/SUPPLIER/COMPANY: Who is providing the goods/services
+   - CLIENT/CUSTOMER: Who is receiving the goods/services
+   - ORDER_DATE/INVOICE_DATE/DATE: Primary document date
+   - DUE_DATE/PAYMENT_DATE: When payment is due
+   - AMOUNT/TOTAL: Total monetary amount
+   - PO_NUMBER/REFERENCE/ORDER_NO: Purchase order or reference number
+   - INVOICE_NO/INVOICE_NUMBER/INV_NO/DOC_NUMBER: Document identifier number
+   - SHIP_DATE/DELIVERY_DATE: Shipping or delivery date
+   - TERMS/PAYMENT_TERMS: Payment terms (e.g., "Net 30")
+
+{line_items_instruction}
+
+8. Respond ONLY with valid JSON in this exact format (no other text):
 {{
     "category": "Category Name",
     "confidence": 0.95,
-    "extracted_data": {{
-        "FIELD_NAME_1": "value 1",
-        "FIELD_NAME_2": "value 2",
-        "FIELD_NAME_3": null
-    }}
-}}"""
+    "extracted_fields": {{
+        "FIELD_NAME_1": "extracted value 1",
+        "INVOCE_NO_": "value (keep exact field name with typo and underscore)",
+        "ZIP_": "value (keep trailing underscore)",
+        "CUSTOMER_P_O__DELIVERY_ADDRES": "value (keep double underscore and missing S)"
+    }},
+    "line_items": [
+        {{
+            "description": "Product Name",
+            "quantity": "10",
+            "unit": "EA",
+            "unit_price": "$25.00",
+            "amount": "$250.00",
+            "sku": "SKU-123"
+        }}
+    ]
+}}
 
-    def _get_context_guidance(self, cabinet_type: str) -> str:
-        """Get context-specific guidance for different cabinet types."""
-        guidance = {
-            'HR': "Focus on employee-related information such as names, departments, positions, dates of employment, and compensation details.",
-            'AP': "Focus on vendor information, invoice details, payment amounts, purchase orders, and due dates.",
-            'AR': "Focus on customer information, revenue details, payment collection, and aging information.",
-            'Sales': "Focus on deal details, client information, contract values, sales representatives, and opportunity data.",
-            'Legal': "Focus on contract parties, agreement terms, signatures, dates, and legal obligations.",
-            'General': "Extract the requested fields as they appear in the document."
-        }
-        return guidance.get(cabinet_type, guidance['General'])
+CRITICAL: The keys in "extracted_fields" MUST match the exact field names from instruction 3, including any typos or unusual formatting.
 
-    def _get_field_hints(self, cabinet_type: str) -> str:
-        """Get field-specific hints based on cabinet type."""
-        hints = {
-            'HR': """   - EMPLOYEE_ID/EMPLOYEE_NO: Unique employee identifier
-   - HIRE_DATE/START_DATE: Date when employee started
-   - DEPARTMENT: Organizational department or division
-   - POSITION/TITLE: Job title or role
-   - SALARY/WAGE: Compensation amount (extract number only)
-   - MANAGER: Name of direct supervisor
-   - TERMINATION_DATE/END_DATE: Last day of employment (if applicable)""",
+DO NOT include markdown code blocks or any other formatting. Output only the JSON object."""
 
-            'AP': """   - VENDOR/SUPPLIER: Company providing goods/services
-   - INVOICE_NO/INVOICE_NUMBER: Unique invoice identifier
-   - INVOICE_DATE: Date invoice was issued
-   - DUE_DATE/PAYMENT_DATE: When payment is due
-   - AMOUNT/TOTAL: Total amount (extract number only)
-   - PO_NUMBER/PURCHASE_ORDER: Purchase order reference
-   - TAX: Tax amount (extract number only)""",
+    def _parse_dynamic_extraction_response(self, response: str, selected_fields: list) -> Tuple[DocumentCategory, float, Optional[ExtractedData]]:
+        """
+        Parse Claude's dynamic extraction response.
 
-            'AR': """   - CUSTOMER/CLIENT: Company or person receiving goods/services
-   - INVOICE_NO: Invoice or billing reference
-   - INVOICE_DATE: Date of invoice
-   - AMOUNT/TOTAL: Amount due (extract number only)
-   - DUE_DATE: Payment due date
-   - AGING: Days past due (if applicable)""",
+        Args:
+            response: JSON string from Claude
+            selected_fields: List of field names that were requested
 
-            'Sales': """   - CLIENT/CUSTOMER: Prospective or current customer
-   - DEAL_VALUE/CONTRACT_VALUE: Total deal amount (extract number only)
-   - SALES_REP: Sales representative name
-   - CLOSE_DATE: Expected or actual close date
-   - STAGE: Sales pipeline stage
-   - OPPORTUNITY_ID: Unique opportunity identifier""",
+        Returns:
+            Tuple of (DocumentCategory, confidence_score, extracted_data)
+        """
+        try:
+            # Clean up response
+            response = response.strip()
+            if response.startswith("```"):
+                lines = response.split("\n")
+                response = "\n".join([line for line in lines if not line.startswith("```")])
 
-            'Legal': """   - CONTRACT_NO/AGREEMENT_NO: Unique contract identifier
-   - PARTY_1/PARTY_2: Contracting parties
-   - EFFECTIVE_DATE: When contract takes effect
-   - EXPIRATION_DATE: When contract ends
-   - CONTRACT_VALUE: Total contract value (extract number only)
-   - SIGNATORY: Person authorized to sign""",
+            data = json.loads(response)
 
-            'General': """   - Extract each field as it most naturally appears in the document
-   - Use field names as hints for what type of information to look for
-   - Dates should be in YYYY-MM-DD format
-   - Numbers should be plain decimals without currency symbols"""
-        }
-        return hints.get(cabinet_type, hints['General'])
+            # Debug logging
+            logger.debug(f"AI Response - Category: {data.get('category')}, Confidence: {data.get('confidence')}")
+            logger.debug(f"Extracted fields: {list(data.get('extracted_fields', {}).keys())}")
+            logger.debug(f"Number of line items: {len(data.get('line_items', []))}")
+
+            # Extract category
+            category_str = data.get("category", "Other")
+            category = self._match_category(category_str)
+
+            # Extract confidence
+            confidence = float(data.get("confidence", 0.5))
+
+            # Extract fields and map to ExtractedData structure
+            extracted_fields = data.get("extracted_fields", {})
+            line_items_raw = data.get("line_items", [])
+
+            # Map common DocuWare field names to ExtractedData fields for preview
+            # BUT ALSO keep them in other_data with original field names for DocuWare upload
+            mapped_data = {}
+            other_data = extracted_fields.copy()  # Keep all original fields for DocuWare
+
+            # Debug: Show which fields have values
+            fields_with_values = {k: v for k, v in extracted_fields.items() if v is not None and v != ""}
+            logger.debug(f"Fields with values: {fields_with_values}")
+
+            for field_name, value in extracted_fields.items():
+                field_upper = field_name.upper()
+
+                # Map vendor/supplier fields
+                if any(x in field_upper for x in ['VENDOR', 'SUPPLIER']):
+                    mapped_data['vendor'] = value
+                # Map client/customer fields
+                elif any(x in field_upper for x in ['CLIENT', 'CUSTOMER']):
+                    mapped_data['client'] = value
+                # Map amount fields
+                elif any(x in field_upper for x in ['AMOUNT', 'TOTAL']):
+                    mapped_data['amount'] = value
+                # Map invoice number fields
+                elif any(x in field_upper for x in ['INVOICE_NO', 'INVOICE_NUMBER', 'INV_NO']):
+                    mapped_data['document_number'] = value
+                # Map PO number fields
+                elif any(x in field_upper for x in ['PO_NUMBER', 'P_O_NUMBER', 'REFERENCE']):
+                    mapped_data['reference_number'] = value
+                # Map date fields
+                elif any(x in field_upper for x in ['ORDER_DATE', 'INVOICE_DATE', 'DOC_DATE']):
+                    mapped_data['date'] = value
+                elif 'DUE_DATE' in field_upper:
+                    mapped_data['due_date'] = value
+                # Map address fields
+                elif 'ADDRESS' in field_upper:
+                    mapped_data['address'] = value
+                # Map email fields
+                elif 'EMAIL' in field_upper:
+                    mapped_data['email'] = value
+                # Map phone fields
+                elif 'PHONE' in field_upper:
+                    mapped_data['phone'] = value
+
+            # Convert line items to LineItem objects if present
+            line_items = None
+            if line_items_raw and isinstance(line_items_raw, list):
+                try:
+                    from models import LineItem
+                    line_items = [LineItem(**item) for item in line_items_raw]
+                    logger.debug(f"Successfully parsed {len(line_items)} line items")
+                    # Show first line item as sample
+                    if line_items:
+                        logger.debug(f"Sample line item: {line_items[0].dict()}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse line items: {e}")
+                    logger.debug(f"Raw line items: {line_items_raw}")
+
+            # Create ExtractedData with:
+            # - Mapped fields for preview display
+            # - other_data with ALL fields in DocuWare field names for upload
+            # - line_items for preview
+            mapped_data['line_items'] = line_items
+            extracted_data = ExtractedData(**mapped_data, other_data=other_data)
+
+            return category, confidence, extracted_data
+
+        except Exception as e:
+            logger.error(f"Failed to parse dynamic extraction response: {e}")
+            logger.debug(f"Response was: {response}")
+            # Return safe fallback
+            return DocumentCategory.OTHER, 0.3, None

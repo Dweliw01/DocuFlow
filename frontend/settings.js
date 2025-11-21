@@ -19,7 +19,10 @@ const state = {
     indexFields: [],
     selectedCabinet: null,
     selectedDialog: null,
-    fieldMapping: {}
+    fieldMapping: {},
+    fieldSuggestions: {},
+    confidenceScores: {},
+    requiredFields: []
 };
 
 // ============================================================================
@@ -28,7 +31,7 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
-    loadExistingConfig();
+    // Note: loadExistingConfig() is now called from settings.html after authentication
 });
 
 function setupEventListeners() {
@@ -37,8 +40,31 @@ function setupEventListeners() {
         radio.addEventListener('change', handleConnectorChange);
     });
 
-    // Connection test
+    // Review mode selection
+    document.querySelectorAll('input[name="review_mode"]').forEach(radio => {
+        radio.addEventListener('change', handleReviewModeChange);
+    });
+
+    // DocuWare connection test
     document.getElementById('test-connection-btn').addEventListener('click', testConnection);
+
+    // Google Drive buttons
+    document.getElementById('gdrive-signin-btn').addEventListener('click', signInWithGoogle);
+    document.getElementById('gdrive-disconnect-btn').addEventListener('click', disconnectGoogleDrive);
+
+    // Google Drive folder structure dropdowns
+    document.getElementById('folder-primary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('primary');
+        updateFolderPreview();
+    });
+    document.getElementById('folder-secondary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('secondary');
+        updateFolderPreview();
+    });
+    document.getElementById('folder-tertiary')?.addEventListener('change', () => {
+        toggleCustomFieldInput('tertiary');
+        updateFolderPreview();
+    });
 
     // Cabinet selection
     document.getElementById('dw-cabinet').addEventListener('change', handleCabinetChange);
@@ -57,6 +83,26 @@ function setupEventListeners() {
 
     // Clear configuration
     document.getElementById('clear-config-btn').addEventListener('click', clearConfiguration);
+
+    // Load review settings
+    loadReviewSettings();
+}
+
+// ============================================================================
+// Helper Functions for Custom Fields
+// ============================================================================
+
+function toggleCustomFieldInput(level) {
+    const select = document.getElementById(`folder-${level}`);
+    const customContainer = document.getElementById(`folder-${level}-custom-container`);
+
+    if (select && customContainer) {
+        if (select.value === 'custom') {
+            customContainer.style.display = 'block';
+        } else {
+            customContainer.style.display = 'none';
+        }
+    }
 }
 
 // ============================================================================
@@ -68,6 +114,8 @@ function handleConnectorChange(event) {
 
     // Hide all config sections
     document.getElementById('docuware-config').style.display = 'none';
+    document.getElementById('google-drive-config').style.display = 'none';
+    document.getElementById('folder-structure-section').style.display = 'none';
     document.getElementById('cabinet-selection').style.display = 'none';
     document.getElementById('index-fields-section').style.display = 'none';
     document.getElementById('field-mapping-section').style.display = 'none';
@@ -76,6 +124,10 @@ function handleConnectorChange(event) {
     // Show relevant section
     if (state.connectorType === 'docuware') {
         document.getElementById('docuware-config').style.display = 'block';
+    } else if (state.connectorType === 'google_drive') {
+        document.getElementById('google-drive-config').style.display = 'block';
+        // Check if already connected
+        checkGoogleDriveStatus();
     } else if (state.connectorType === 'none') {
         // Show save section for "none" option
         document.getElementById('save-section').style.display = 'block';
@@ -106,7 +158,7 @@ async function testConnection() {
     btn.textContent = 'Testing...';
 
     try {
-        const response = await fetch('/api/connectors/docuware/test', {
+        const response = await authenticatedFetch('/api/connectors/docuware/test', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -138,13 +190,66 @@ async function testConnection() {
     }
 }
 
+async function loadSavedDocuWareConfig(dwConfig) {
+    /**
+     * Load saved DocuWare configuration WITHOUT re-authenticating.
+     * This prevents account lockouts from multiple authentication attempts.
+     */
+    try {
+        // Manually populate cabinet dropdown with saved cabinet
+        const cabinetSelect = document.getElementById('dw-cabinet');
+        cabinetSelect.innerHTML = `<option value="${dwConfig.cabinet_id}" selected>${dwConfig.cabinet_name}</option>`;
+
+        state.selectedCabinet = {
+            id: dwConfig.cabinet_id,
+            name: dwConfig.cabinet_name
+        };
+
+        // Manually populate dialog dropdown with saved dialog
+        const dialogSelect = document.getElementById('dw-dialog');
+        dialogSelect.innerHTML = `<option value="${dwConfig.dialog_id}" selected>${dwConfig.dialog_name}</option>`;
+        dialogSelect.disabled = false;
+
+        state.selectedDialog = {
+            id: dwConfig.dialog_id,
+            name: dwConfig.dialog_name
+        };
+
+        // Enable load fields button
+        document.getElementById('load-fields-btn').disabled = false;
+
+        // Show cabinet/dialog selection sections
+        document.getElementById('cabinet-selection').style.display = 'block';
+
+        showAlert('connection-status', 'success', `✓ Loaded configuration: ${dwConfig.cabinet_name} / ${dwConfig.dialog_name}`);
+
+        // Add info message
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'alert alert-info';
+        infoDiv.style.marginTop = '16px';
+        infoDiv.innerHTML = `
+            <strong>ℹ️ Editing Mode:</strong> Click "Load Index Fields" to see and modify your field selections.
+            If you need to change cabinet/dialog, please test connection first with your credentials.
+        `;
+
+        const cabinetSection = document.getElementById('cabinet-selection');
+        if (cabinetSection && !cabinetSection.querySelector('.alert-info')) {
+            cabinetSection.appendChild(infoDiv);
+        }
+
+    } catch (error) {
+        console.error('Failed to load saved config:', error);
+        showAlert('connection-status', 'error', 'Failed to load saved configuration. Please test connection manually.');
+    }
+}
+
 // ============================================================================
 // File Cabinets
 // ============================================================================
 
 async function loadFileCabinets() {
     try {
-        const response = await fetch('/api/connectors/docuware/cabinets', {
+        const response = await authenticatedFetch('/api/connectors/docuware/cabinets', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -179,8 +284,6 @@ async function loadFileCabinets() {
             }
         }
 
-        console.log(`Loaded ${state.cabinets.length} file cabinets`);
-
     } catch (error) {
         console.error('Failed to load cabinets:', error);
         showAlert('connection-status', 'error', 'Failed to load file cabinets');
@@ -209,7 +312,7 @@ function handleCabinetChange(event) {
 
 async function loadStorageDialogs(cabinetId) {
     try {
-        const response = await fetch('/api/connectors/docuware/dialogs', {
+        const response = await authenticatedFetch('/api/connectors/docuware/dialogs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -245,8 +348,6 @@ async function loadStorageDialogs(cabinetId) {
             await loadIndexFields();
         }
 
-        console.log(`Loaded ${state.dialogs.length} storage dialogs`);
-
     } catch (error) {
         console.error('Failed to load dialogs:', error);
         showAlert('connection-status', 'error', 'Failed to load storage dialogs');
@@ -275,7 +376,7 @@ async function loadIndexFields() {
     btn.innerHTML = '<span class="btn-icon">⏳</span> Loading...';
 
     try {
-        const response = await fetch('/api/connectors/docuware/fields', {
+        const response = await authenticatedFetch('/api/connectors/docuware/fields', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -290,22 +391,23 @@ async function loadIndexFields() {
         const result = await response.json();
         state.indexFields = result.fields || [];
 
+        // Get smart field suggestions with confidence scores
+        await getFieldSuggestions(state.indexFields);
+
         // Display fields table
         displayIndexFields(state.indexFields);
 
         // Show index fields section
         document.getElementById('index-fields-section').style.display = 'block';
 
-        // Build field mapping
-        buildFieldMapping(state.indexFields);
+        // Build field selection with suggestions
+        buildFieldSelection(state.indexFields);
 
-        // Show field mapping section
+        // Show field selection section
         document.getElementById('field-mapping-section').style.display = 'block';
 
         // Show save button
         document.getElementById('save-section').style.display = 'block';
-
-        console.log(`Loaded ${state.indexFields.length} index fields`);
 
     } catch (error) {
         console.error('Failed to load index fields:', error);
@@ -313,6 +415,29 @@ async function loadIndexFields() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<span class="btn-icon">🏷️</span> Load Index Fields';
+    }
+}
+
+async function getFieldSuggestions(fields) {
+    try {
+        const response = await authenticatedFetch('/api/connectors/field-suggestions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields)
+        });
+
+        const result = await response.json();
+
+        state.fieldSuggestions = result.suggestions || {};
+        state.confidenceScores = result.confidence_scores || {};
+        state.requiredFields = result.required_fields || [];
+
+        console.log(`✨ Found ${result.suggested_field_count} suggested field mappings`);
+    } catch (error) {
+        console.error('Failed to get field suggestions:', error);
+        // Don't fail the whole flow if suggestions fail
+        state.fieldSuggestions = {};
+        state.confidenceScores = {};
     }
 }
 
@@ -330,16 +455,43 @@ function displayIndexFields(fields) {
                 </tr>
             </thead>
             <tbody>
-                ${fields.map(field => `
-                    <tr>
-                        <td><strong>${field.name}</strong></td>
-                        <td><span class="field-type">${field.type}</span></td>
-                        <td class="${field.required ? 'field-required' : 'field-optional'}">
-                            ${field.required ? '✓ Yes' : 'No'}
-                        </td>
-                        <td>${field.max_length || '-'}</td>
-                    </tr>
-                `).join('')}
+                ${fields.map(field => {
+                    if (field.is_table_field && field.table_columns) {
+                        // Display table field with nested columns
+                        return `
+                            <tr class="table-field-row">
+                                <td><strong>${field.name}</strong> <span class="table-indicator">📋 Table Field</span></td>
+                                <td><span class="field-type">${field.type}</span></td>
+                                <td class="${field.required ? 'field-required' : 'field-optional'}">
+                                    ${field.required ? '✓ Yes' : 'No'}
+                                </td>
+                                <td>-</td>
+                            </tr>
+                            ${field.table_columns.map(col => `
+                                <tr class="table-column-row">
+                                    <td style="padding-left: 30px;">↳ ${col.label} <span class="column-name">(${col.name})</span></td>
+                                    <td><span class="field-type field-type-small">${col.type}</span></td>
+                                    <td class="${col.required ? 'field-required' : 'field-optional'}">
+                                        ${col.required ? '✓ Yes' : 'No'}
+                                    </td>
+                                    <td>-</td>
+                                </tr>
+                            `).join('')}
+                        `;
+                    } else {
+                        // Regular field
+                        return `
+                            <tr>
+                                <td><strong>${field.name}</strong></td>
+                                <td><span class="field-type">${field.type}</span></td>
+                                <td class="${field.required ? 'field-required' : 'field-optional'}">
+                                    ${field.required ? '✓ Yes' : 'No'}
+                                </td>
+                                <td>${field.max_length || '-'}</td>
+                            </tr>
+                        `;
+                    }
+                }).join('')}
             </tbody>
         </table>
     `;
@@ -351,70 +503,188 @@ function displayIndexFields(fields) {
 // Field Mapping
 // ============================================================================
 
-function buildFieldMapping(docuwareFields) {
-    const docuflowFields = [
-        'vendor',
-        'document_number',
-        'date',
-        'due_date',
-        'amount',
-        'currency',
-        'reference_number',
-        'person_name',
-        'company',
-        'client',
-        'address',
-        'email',
-        'phone',
-        'document_type'
-    ];
-
+function buildFieldSelection(docuwareFields) {
     const container = document.getElementById('field-mapping-container');
 
-    const mappingHtml = `
-        <div class="mapping-grid">
-            ${docuflowFields.map(dfField => `
-                <div class="mapping-row">
-                    <span class="df-field">${dfField}</span>
-                    <span class="mapping-arrow">→</span>
-                    <select class="dw-field-select" data-df-field="${dfField}">
-                        <option value="">-- Not Mapped --</option>
-                        ${docuwareFields.map(dwField => `
-                            <option value="${dwField.name}">${dwField.name}</option>
-                        `).join('')}
-                    </select>
+    // Filter out system fields and separate table fields from regular fields
+    const userFields = docuwareFields.filter(field => !field.is_system_field);
+    const regularFields = userFields.filter(field => !field.is_table_field);
+    const tableFields = userFields.filter(field => field.is_table_field);
+
+    // Group regular fields by required vs optional
+    const requiredFields = regularFields.filter(field => field.required);
+    const optionalFields = regularFields.filter(field => !field.required);
+
+    // Helper function to get confidence badge
+    const getConfidenceBadge = (fieldName) => {
+        const confidence = state.confidenceScores[fieldName];
+        if (!confidence) return '';
+
+        if (confidence >= 0.9) {
+            return `<span class="confidence-badge confidence-high" title="High confidence match (${Math.round(confidence * 100)}%)">✓ ${Math.round(confidence * 100)}%</span>`;
+        } else if (confidence >= 0.7) {
+            return `<span class="confidence-badge confidence-medium" title="Medium confidence match (${Math.round(confidence * 100)}%)">~ ${Math.round(confidence * 100)}%</span>`;
+        } else {
+            return `<span class="confidence-badge confidence-low" title="Low confidence match (${Math.round(confidence * 100)}%)">? ${Math.round(confidence * 100)}%</span>`;
+        }
+    };
+
+    // Helper to check if field is suggested (has good confidence)
+    const isSuggested = (fieldName) => {
+        return Object.values(state.fieldSuggestions).includes(fieldName);
+    };
+
+    const selectionHtml = `
+        <div class="field-selection-container">
+            ${requiredFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">
+                        Required Fields <span class="field-count">(${requiredFields.length})</span>
+                        ${requiredFields.length > 0 ? '<span class="info-icon" title="These fields must be filled for DocuWare">ℹ️</span>' : ''}
+                    </h3>
+                    <p class="field-group-description">These fields are required by DocuWare and should be extracted from documents</p>
+                    <div class="field-checkboxes">
+                        ${requiredFields.map(field => {
+                            const suggested = isSuggested(field.name);
+                            return `
+                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
+                                <input
+                                    type="checkbox"
+                                    class="field-checkbox-input"
+                                    data-field-name="${field.name}"
+                                    data-required="true"
+                                    ${suggested ? 'checked' : ''}
+                                >
+                                <span class="field-name">${field.name}</span>
+                                <span class="field-badge field-badge-required">Required</span>
+                            </label>
+                        `}).join('')}
+                    </div>
                 </div>
-            `).join('')}
+            ` : ''}
+
+            ${optionalFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">Optional Fields <span class="field-count">(${optionalFields.length})</span></h3>
+                    <p class="field-group-description">Select which optional fields AI should try to extract</p>
+                    <div class="field-checkboxes">
+                        ${optionalFields.map(field => {
+                            const suggested = isSuggested(field.name);
+                            return `
+                            <label class="field-checkbox ${suggested ? 'field-suggested' : ''}">
+                                <input
+                                    type="checkbox"
+                                    class="field-checkbox-input"
+                                    data-field-name="${field.name}"
+                                    data-required="false"
+                                    ${suggested ? 'checked' : ''}
+                                >
+                                <span class="field-name">${field.name}</span>
+                            </label>
+                        `}).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${tableFields.length > 0 ? `
+                <div class="field-group">
+                    <h3 class="field-group-title">Table Fields <span class="field-count">(${tableFields.length})</span></h3>
+                    <p class="field-group-description">Select table field columns to populate with AI-extracted line items</p>
+                    ${tableFields.map(tableField => {
+                        const columns = tableField.table_columns || [];
+                        if (columns.length === 0) {
+                            return `
+                                <div class="table-field-section">
+                                    <h4 class="table-field-name">📋 ${tableField.name}</h4>
+                                    <p class="table-field-description" style="color: #dc3545;">
+                                        ⚠️ No columns found for this table field. The table may be empty in DocuWare.
+                                    </p>
+                                </div>
+                            `;
+                        }
+                        return `
+                            <div class="table-field-section">
+                                <h4 class="table-field-name">📋 ${tableField.name}</h4>
+                                <p class="table-field-description">Select which columns to populate from line item data:</p>
+                                <div class="field-checkboxes table-column-checkboxes">
+                                    ${columns.map(column => `
+                                        <label class="field-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                class="field-checkbox-input table-column-input"
+                                                data-table-field="${tableField.name}"
+                                                data-column-name="${column.name}"
+                                                data-column-label="${column.label}"
+                                                data-column-type="${column.type}"
+                                            >
+                                            <span class="field-name">${column.label}</span>
+                                            <span class="field-badge field-badge-type">${column.type}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : ''}
+
+            <div class="field-selection-summary">
+                <strong>Selected:</strong> <span id="selected-field-count">0</span> fields/columns
+            </div>
         </div>
     `;
 
-    container.innerHTML = mappingHtml;
+    container.innerHTML = selectionHtml;
 
-    // If editing existing config, restore saved mappings
-    if (state.editingConfig && state.editingConfig.fieldMapping) {
-        restoreFieldMappings(state.editingConfig.fieldMapping);
-    } else {
-        // Auto-map fields for new configuration
-        autoMapFields(docuflowFields, docuwareFields);
+    // If editing existing config, restore saved selections
+    if (state.editingConfig && state.editingConfig.selectedFields) {
+        restoreFieldSelections(state.editingConfig.selectedFields, state.editingConfig.selectedTableColumns);
     }
 
     // Add change listeners
-    document.querySelectorAll('.dw-field-select').forEach(select => {
-        select.addEventListener('change', validateMapping);
+    document.querySelectorAll('.field-checkbox-input').forEach(checkbox => {
+        checkbox.addEventListener('change', updateFieldSelectionCount);
     });
 
-    // Initial validation
-    validateMapping();
+    // Initial count update
+    updateFieldSelectionCount();
 }
 
-function restoreFieldMappings(savedMapping) {
-    Object.entries(savedMapping).forEach(([dfField, dwField]) => {
-        const select = document.querySelector(`[data-df-field="${dfField}"]`);
-        if (select) {
-            select.value = dwField;
-            console.log(`Restored mapping: ${dfField} → ${dwField}`);
-        }
-    });
+function restoreFieldSelections(selectedFields, selectedTableColumns) {
+    // Restore regular field selections
+    if (selectedFields && Array.isArray(selectedFields)) {
+        selectedFields.forEach(fieldName => {
+            const checkbox = document.querySelector(`[data-field-name="${fieldName}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+    }
+
+    // Restore table column selections
+    if (selectedTableColumns) {
+        Object.keys(selectedTableColumns).forEach(tableFieldName => {
+            const columns = selectedTableColumns[tableFieldName];
+            if (Array.isArray(columns)) {
+                columns.forEach(column => {
+                    const checkbox = document.querySelector(
+                        `[data-table-field="${tableFieldName}"][data-column-name="${column.name}"]`
+                    );
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    }
+                });
+            }
+        });
+    }
+}
+
+function updateFieldSelectionCount() {
+    const selectedCount = document.querySelectorAll('.field-checkbox-input:checked').length;
+    const countSpan = document.getElementById('selected-field-count');
+    if (countSpan) {
+        countSpan.textContent = selectedCount;
+    }
 }
 
 function autoMapFields(docuflowFields, docuwareFields) {
@@ -426,7 +696,6 @@ function autoMapFields(docuflowFields, docuwareFields) {
 
         if (match) {
             select.value = match.name;
-            console.log(`Auto-mapped: ${dfField} → ${match.name}`);
         }
     });
 }
@@ -503,6 +772,30 @@ function validateMapping() {
 }
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+function validateRequiredFields(selectedFields) {
+    // Check which required fields are NOT selected
+    const missingRequired = state.requiredFields.filter(reqField =>
+        !selectedFields.includes(reqField)
+    );
+
+    return {
+        valid: missingRequired.length === 0,
+        missingRequired: missingRequired
+    };
+}
+
+async function showValidationWarning(missingFields) {
+    const fieldList = missingFields.map(f => `• ${f}`).join('\n');
+
+    const message = `⚠️ Warning: The following REQUIRED fields are not selected:\n\n${fieldList}\n\nDocuWare requires these fields to be filled. Documents without these fields may fail to upload.\n\nDo you want to continue anyway?`;
+
+    return confirm(message);
+}
+
+// ============================================================================
 // Save Configuration
 // ============================================================================
 
@@ -534,9 +827,41 @@ async function saveConfiguration() {
                 return;
             }
 
-            if (Object.keys(state.fieldMapping).length === 0) {
-                showAlert('connection-status', 'error', 'Please configure field mapping');
+            // Collect selected fields (regular fields only, not table columns)
+            const selectedFields = Array.from(document.querySelectorAll('.field-checkbox-input:checked:not(.table-column-input)'))
+                .map(checkbox => checkbox.dataset.fieldName);
+
+            // Collect selected table columns
+            const selectedTableColumns = {};
+            document.querySelectorAll('.table-column-input:checked').forEach(checkbox => {
+                const tableField = checkbox.dataset.tableField;
+                const columnName = checkbox.dataset.columnName;
+                const columnLabel = checkbox.dataset.columnLabel;
+                const columnType = checkbox.dataset.columnType;
+
+                if (!selectedTableColumns[tableField]) {
+                    selectedTableColumns[tableField] = [];
+                }
+
+                selectedTableColumns[tableField].push({
+                    name: columnName,
+                    label: columnLabel,
+                    type: columnType
+                });
+            });
+
+            if (selectedFields.length === 0 && Object.keys(selectedTableColumns).length === 0) {
+                showAlert('connection-status', 'error', 'Please select at least one field or table column');
                 return;
+            }
+
+            // Validate required fields
+            const validation = validateRequiredFields(selectedFields);
+            if (!validation.valid) {
+                const proceed = await showValidationWarning(validation.missingRequired);
+                if (!proceed) {
+                    return; // User cancelled
+                }
             }
 
             // Build DocuWare config
@@ -550,15 +875,50 @@ async function saveConfiguration() {
                     cabinet_name: state.selectedCabinet.name,
                     dialog_id: state.selectedDialog.id,
                     dialog_name: state.selectedDialog.name,
-                    field_mapping: state.fieldMapping
+                    selected_fields: selectedFields,
+                    selected_table_columns: selectedTableColumns
                 },
                 google_drive: null,
                 onedrive: null
             };
+        } else if (state.connectorType === 'google_drive') {
+            // Google Drive config is already saved during OAuth callback
+            // Just update the root folder name and folder structure if changed
+            const rootFolderName = document.getElementById('gdrive-folder-name').value.trim() || 'DocuFlow';
+            const primaryLevel = document.getElementById('folder-primary').value;
+            const secondaryLevel = document.getElementById('folder-secondary').value;
+            const tertiaryLevel = document.getElementById('folder-tertiary').value;
+
+            // Get custom field names if "custom" is selected
+            const primaryCustomField = primaryLevel === 'custom' ?
+                document.getElementById('folder-primary-custom').value.trim() : null;
+            const secondaryCustomField = secondaryLevel === 'custom' ?
+                document.getElementById('folder-secondary-custom').value.trim() : null;
+            const tertiaryCustomField = tertiaryLevel === 'custom' ?
+                document.getElementById('folder-tertiary-custom').value.trim() : null;
+
+            // Get current config and update folder name + structure
+            const currentConfigResponse = await authenticatedFetch('/api/connectors/config');
+            const currentConfig = await currentConfigResponse.json();
+
+            if (!currentConfig.google_drive) {
+                showAlert('gdrive-connection-status', 'error', 'Please sign in with Google first');
+                return;
+            }
+
+            // Update folder name and structure
+            currentConfig.google_drive.root_folder_name = rootFolderName;
+            currentConfig.google_drive.primary_level = primaryLevel;
+            currentConfig.google_drive.primary_custom_field = primaryCustomField;
+            currentConfig.google_drive.secondary_level = secondaryLevel;
+            currentConfig.google_drive.secondary_custom_field = secondaryCustomField;
+            currentConfig.google_drive.tertiary_level = tertiaryLevel;
+            currentConfig.google_drive.tertiary_custom_field = tertiaryCustomField;
+            config = currentConfig;
         }
 
         // Save configuration
-        const response = await fetch('/api/connectors/config', {
+        const response = await authenticatedFetch('/api/connectors/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config)
@@ -582,16 +942,19 @@ async function saveConfiguration() {
             // Hide config sections after successful save
             setTimeout(() => {
                 document.getElementById('docuware-config').style.display = 'none';
+                document.getElementById('google-drive-config').style.display = 'none';
+                document.getElementById('folder-structure-section').style.display = 'none';
                 document.getElementById('cabinet-selection').style.display = 'none';
                 document.getElementById('index-fields-section').style.display = 'none';
                 document.getElementById('field-mapping-section').style.display = 'none';
                 document.getElementById('save-section').style.display = 'none';
 
+                // Hide success message
+                document.getElementById('success-message').style.display = 'none';
+
                 // Scroll to top to show the configuration display
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 2000);
-
-            console.log('Configuration saved successfully');
         } else {
             showAlert('connection-status', 'error', 'Failed to save configuration');
         }
@@ -611,12 +974,10 @@ async function saveConfiguration() {
 
 async function loadExistingConfig() {
     try {
-        const response = await fetch('/api/connectors/config');
+        const response = await authenticatedFetch('/api/connectors/config');
         const config = await response.json();
 
         if (config.connector_type !== 'none' && config.connector_type) {
-            console.log('Existing configuration found:', config.connector_type);
-
             // Display configuration summary
             displayConfigurationSummary(config);
 
@@ -624,19 +985,33 @@ async function loadExistingConfig() {
             state.savedConfig = config;
 
         } else {
-            // No configuration exists, hide the display
+            // No configuration exists, hide the display and show connector selection
             document.getElementById('current-config-display').style.display = 'none';
+            document.getElementById('connector-selection-section').style.display = 'block';
         }
 
     } catch (error) {
         console.error('Failed to load existing config:', error);
         document.getElementById('current-config-display').style.display = 'none';
+        document.getElementById('connector-selection-section').style.display = 'block';
     }
 }
 
 function displayConfigurationSummary(config) {
     // Show the configuration display card
     document.getElementById('current-config-display').style.display = 'block';
+
+    // Hide the connector selection radio buttons (cleaner UI - can only change via Edit button)
+    document.getElementById('connector-selection-section').style.display = 'none';
+
+    // Hide the setup sections
+    document.getElementById('docuware-config').style.display = 'none';
+    document.getElementById('google-drive-config').style.display = 'none';
+    document.getElementById('folder-structure-section').style.display = 'none';
+    document.getElementById('cabinet-selection').style.display = 'none';
+    document.getElementById('index-fields-section').style.display = 'none';
+    document.getElementById('field-mapping-section').style.display = 'none';
+    document.getElementById('save-section').style.display = 'none';
 
     // Display connector type
     const connectorTypeMap = {
@@ -645,6 +1020,10 @@ function displayConfigurationSummary(config) {
         'onedrive': 'OneDrive'
     };
     document.getElementById('current-connector-type').textContent = connectorTypeMap[config.connector_type] || config.connector_type;
+
+    // Hide all connector-specific summaries first
+    document.getElementById('docuware-summary').style.display = 'none';
+    document.getElementById('google-drive-summary').style.display = 'none';
 
     // Display DocuWare-specific details
     if (config.connector_type === 'docuware' && config.docuware) {
@@ -656,10 +1035,48 @@ function displayConfigurationSummary(config) {
         document.getElementById('current-cabinet').textContent = dw.cabinet_name || dw.cabinet_id;
         document.getElementById('current-dialog').textContent = dw.dialog_name || dw.dialog_id;
 
-        const mappingCount = Object.keys(dw.field_mapping || {}).length;
-        document.getElementById('current-mappings-count').textContent = `${mappingCount} field${mappingCount !== 1 ? 's' : ''} mapped`;
-    } else {
-        document.getElementById('docuware-summary').style.display = 'none';
+        const selectedCount = dw.selected_fields?.length || 0;
+        document.getElementById('current-mappings-count').textContent = `${selectedCount} field${selectedCount !== 1 ? 's' : ''} selected`;
+    }
+
+    // Display Google Drive-specific details
+    if (config.connector_type === 'google_drive' && config.google_drive) {
+        const gd = config.google_drive;
+
+        document.getElementById('google-drive-summary').style.display = 'block';
+        document.getElementById('current-root-folder').textContent = gd.root_folder_name || 'DocuFlow';
+
+        // Build folder structure preview
+        const levelLabels = {
+            'category': 'Category',
+            'vendor': 'Vendor',
+            'client': 'Client',
+            'company': 'Company',
+            'year': 'Year',
+            'year_month': 'Year-Month',
+            'month': 'Month',
+            'quarter': 'Quarter',
+            'document_type': 'Document Type',
+            'document_number': 'Document Number',
+            'person_name': 'Person Name',
+            'project': 'Project',
+            'custom': 'Custom',
+            'none': null
+        };
+
+        const levels = [];
+        if (gd.primary_level && gd.primary_level !== 'none') {
+            levels.push(levelLabels[gd.primary_level] || gd.primary_level);
+        }
+        if (gd.secondary_level && gd.secondary_level !== 'none') {
+            levels.push(levelLabels[gd.secondary_level] || gd.secondary_level);
+        }
+        if (gd.tertiary_level && gd.tertiary_level !== 'none') {
+            levels.push(levelLabels[gd.tertiary_level] || gd.tertiary_level);
+        }
+
+        const structureText = levels.length > 0 ? levels.join(' → ') : 'Category only';
+        document.getElementById('current-folder-structure').textContent = structureText;
     }
 }
 
@@ -670,6 +1087,10 @@ async function editConfiguration() {
         showAlert('connection-status', 'error', 'No configuration to edit');
         return;
     }
+
+    // Hide the summary card and show connector selection
+    document.getElementById('current-config-display').style.display = 'none';
+    document.getElementById('connector-selection-section').style.display = 'block';
 
     // Set connector type radio
     const radio = document.querySelector(`input[name="connector"][value="${config.connector_type}"]`);
@@ -684,37 +1105,83 @@ async function editConfiguration() {
 
         const dw = config.docuware;
 
-        // Pre-populate credentials (password will be empty for security)
+        // Pre-populate credentials
         document.getElementById('dw-server-url').value = dw.server_url;
         document.getElementById('dw-username').value = dw.username;
         document.getElementById('dw-password').value = ''; // Don't show encrypted password
-        document.getElementById('dw-password').placeholder = '(password unchanged - leave empty to keep current)';
+        document.getElementById('dw-password').placeholder = '(using saved password - leave empty to keep current)';
 
-        // Update state with credentials (we'll need to re-authenticate to load cabinets)
+        // Update state with credentials
         state.credentials = {
             serverUrl: dw.server_url,
             username: dw.username,
-            password: '' // Will need to be re-entered or fetched
+            password: dw.encrypted_password // Use the encrypted password from saved config
         };
 
-        // Show a message that they need to test connection first
-        showAlert('connection-status', 'info', 'Please test connection to continue editing configuration');
-
-        // Store the existing config for later restoration
+        // Store the existing config for restoration
         state.editingConfig = {
             cabinetId: dw.cabinet_id,
             cabinetName: dw.cabinet_name,
             dialogId: dw.dialog_id,
             dialogName: dw.dialog_name,
-            fieldMapping: dw.field_mapping
+            selectedFields: dw.selected_fields,
+            selectedTableColumns: dw.selected_table_columns
         };
+
+        // Directly load saved configuration without re-authenticating (to avoid account lockouts)
+        showAlert('connection-status', 'info', 'Loading your saved configuration...');
+
+        // Populate cabinets and dialogs from saved config
+        await loadSavedDocuWareConfig(dw);
+
+        // Scroll to the config section
+        document.getElementById('docuware-config').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
     }
 
-    // Scroll to the config section
-    document.getElementById('docuware-config').scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-    });
+    // Show Google Drive config section
+    if (config.connector_type === 'google_drive' && config.google_drive) {
+        document.getElementById('google-drive-config').style.display = 'block';
+        document.getElementById('gdrive-connected').style.display = 'block';
+        document.getElementById('gdrive-not-connected').style.display = 'none';
+        document.getElementById('folder-structure-section').style.display = 'block';
+        document.getElementById('save-section').style.display = 'block';
+
+        const gd = config.google_drive;
+
+        // Pre-populate folder settings
+        document.getElementById('gdrive-folder-name').value = gd.root_folder_name || 'DocuFlow';
+        document.getElementById('folder-primary').value = gd.primary_level || 'category';
+        document.getElementById('folder-secondary').value = gd.secondary_level || 'vendor';
+        document.getElementById('folder-tertiary').value = gd.tertiary_level || 'none';
+
+        // Pre-populate custom field inputs and show/hide them
+        if (gd.primary_custom_field) {
+            document.getElementById('folder-primary-custom').value = gd.primary_custom_field;
+        }
+        if (gd.secondary_custom_field) {
+            document.getElementById('folder-secondary-custom').value = gd.secondary_custom_field;
+        }
+        if (gd.tertiary_custom_field) {
+            document.getElementById('folder-tertiary-custom').value = gd.tertiary_custom_field;
+        }
+
+        // Show/hide custom field inputs based on selection
+        toggleCustomFieldInput('primary');
+        toggleCustomFieldInput('secondary');
+        toggleCustomFieldInput('tertiary');
+
+        // Update preview
+        updateFolderPreview();
+
+        // Scroll to the config section
+        document.getElementById('google-drive-config').scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
 }
 
 async function clearConfiguration() {
@@ -723,7 +1190,7 @@ async function clearConfiguration() {
     }
 
     try {
-        const response = await fetch('/api/connectors/config', {
+        const response = await authenticatedFetch('/api/connectors/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -737,8 +1204,9 @@ async function clearConfiguration() {
         const result = await response.json();
 
         if (result.success) {
-            // Hide configuration display
+            // Hide configuration display and show connector selection
             document.getElementById('current-config-display').style.display = 'none';
+            document.getElementById('connector-selection-section').style.display = 'block';
 
             // Reset state
             state.savedConfig = null;
@@ -749,15 +1217,21 @@ async function clearConfiguration() {
 
             // Hide all config sections
             document.getElementById('docuware-config').style.display = 'none';
+            document.getElementById('google-drive-config').style.display = 'none';
+            document.getElementById('folder-structure-section').style.display = 'none';
             document.getElementById('cabinet-selection').style.display = 'none';
             document.getElementById('index-fields-section').style.display = 'none';
             document.getElementById('field-mapping-section').style.display = 'none';
             document.getElementById('save-section').style.display = 'none';
 
-            // Clear form fields
+            // Clear DocuWare form fields
             document.getElementById('dw-server-url').value = '';
             document.getElementById('dw-username').value = '';
             document.getElementById('dw-password').value = '';
+
+            // Reset Google Drive to not connected state
+            document.getElementById('gdrive-not-connected').style.display = 'block';
+            document.getElementById('gdrive-connected').style.display = 'none';
 
             showAlert('connection-status', 'success', 'Configuration cleared successfully');
         } else {
@@ -767,6 +1241,209 @@ async function clearConfiguration() {
     } catch (error) {
         console.error('Clear configuration error:', error);
         showAlert('connection-status', 'error', 'Error clearing configuration: ' + error.message);
+    }
+}
+
+// ============================================================================
+// Google Drive Connection
+// ============================================================================
+
+// ============================================================================
+// Google Drive OAuth Flow
+// ============================================================================
+
+async function checkGoogleDriveStatus() {
+    /**
+     * Check if Google Drive is already connected.
+     * Shows appropriate UI state (connected vs not connected).
+     */
+    try {
+        const response = await authenticatedFetch('/api/connectors/google-drive/status');
+        const result = await response.json();
+
+        if (result.connected) {
+            // Show connected state
+            document.getElementById('gdrive-not-connected').style.display = 'none';
+            document.getElementById('gdrive-connected').style.display = 'block';
+            document.getElementById('gdrive-folder-name').value = result.root_folder_name || 'DocuFlow';
+
+            // Show folder structure configuration section
+            document.getElementById('folder-structure-section').style.display = 'block';
+
+            // Load existing folder structure config if available
+            if (result.primary_level) {
+                document.getElementById('folder-primary').value = result.primary_level;
+            }
+            if (result.secondary_level) {
+                document.getElementById('folder-secondary').value = result.secondary_level;
+            }
+            if (result.tertiary_level) {
+                document.getElementById('folder-tertiary').value = result.tertiary_level;
+            }
+            updateFolderPreview();
+
+            // Show save section
+            document.getElementById('save-section').style.display = 'block';
+        } else {
+            // Show not connected state
+            document.getElementById('gdrive-not-connected').style.display = 'block';
+            document.getElementById('gdrive-connected').style.display = 'none';
+            document.getElementById('folder-structure-section').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to check Google Drive status:', error);
+    }
+}
+
+async function signInWithGoogle() {
+    /**
+     * Initiate Google OAuth flow.
+     * Opens OAuth URL in popup window and handles callback.
+     */
+    const btn = document.getElementById('gdrive-signin-btn');
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+
+    try {
+        // Get OAuth URL from backend
+        const response = await authenticatedFetch('/api/connectors/google-drive/oauth-start');
+        const result = await response.json();
+
+        if (!result.authorization_url) {
+            throw new Error('Failed to generate OAuth URL');
+        }
+
+        // Open OAuth URL in popup window
+        const width = 600;
+        const height = 700;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+
+        const popup = window.open(
+            result.authorization_url,
+            'Google OAuth',
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+
+        if (!popup) {
+            throw new Error('Popup blocked. Please allow popups for this site.');
+        }
+
+        // Listen for OAuth success message from popup
+        window.addEventListener('message', function oauthMessageHandler(event) {
+            if (event.data.type === 'GOOGLE_OAUTH_SUCCESS') {
+                // Remove listener
+                window.removeEventListener('message', oauthMessageHandler);
+
+                // Close popup if still open
+                if (popup && !popup.closed) {
+                    popup.close();
+                }
+
+                // Show success state
+                document.getElementById('gdrive-not-connected').style.display = 'none';
+                document.getElementById('gdrive-connected').style.display = 'block';
+                document.getElementById('folder-structure-section').style.display = 'block';
+                document.getElementById('save-section').style.display = 'block';
+
+                // Initialize folder preview
+                updateFolderPreview();
+
+                showAlert('gdrive-connection-status', 'success', '✓ Successfully connected to Google Drive!');
+            }
+        });
+
+    } catch (error) {
+        showAlert('gdrive-connection-status', 'error', `Failed to connect: ${error.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg class="btn-icon" viewBox="0 0 24 24" width="20" height="20">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
+        `;
+    }
+}
+
+async function disconnectGoogleDrive() {
+    /**
+     * Disconnect Google Drive and clear configuration.
+     */
+    if (!confirm('Are you sure you want to disconnect Google Drive?')) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch('/api/connectors/config', {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Reset UI to not connected state
+            document.getElementById('gdrive-not-connected').style.display = 'block';
+            document.getElementById('gdrive-connected').style.display = 'none';
+            document.getElementById('folder-structure-section').style.display = 'none';
+            document.getElementById('save-section').style.display = 'none';
+
+            showAlert('gdrive-connection-status', 'success', '✓ Disconnected from Google Drive');
+        } else {
+            showAlert('gdrive-connection-status', 'error', 'Failed to disconnect');
+        }
+    } catch (error) {
+        showAlert('gdrive-connection-status', 'error', `Error: ${error.message}`);
+    }
+}
+
+function updateFolderPreview() {
+    /**
+     * Update the folder structure preview based on selected dropdown values.
+     * Shows example folder path like: DocuFlow/Invoices/Acme-Corp/2025/
+     */
+    const primary = document.getElementById('folder-primary')?.value;
+    const secondary = document.getElementById('folder-secondary')?.value;
+    const tertiary = document.getElementById('folder-tertiary')?.value;
+
+    if (!primary) return;
+
+    // Map values to example folder names
+    const exampleValues = {
+        'category': 'Invoices',
+        'vendor': 'Acme-Corp',
+        'client': 'Microsoft',
+        'company': 'Tech-Solutions',
+        'year': '2025',
+        'year_month': '2025-01',
+        'document_type': 'Purchase-Invoice',
+        'person_name': 'John-Doe',
+        'none': null
+    };
+
+    // Build folder path
+    const parts = ['DocuFlow'];
+
+    if (primary) {
+        parts.push(exampleValues[primary]);
+    }
+
+    if (secondary && secondary !== 'none') {
+        parts.push(exampleValues[secondary]);
+    }
+
+    if (tertiary && tertiary !== 'none') {
+        parts.push(exampleValues[tertiary]);
+    }
+
+    // Update preview
+    const preview = parts.filter(p => p !== null).join('/') + '/';
+    const previewElement = document.getElementById('folder-preview');
+    if (previewElement) {
+        previewElement.textContent = preview;
     }
 }
 
@@ -785,5 +1462,236 @@ function showAlert(containerId, type, message) {
         setTimeout(() => {
             container.style.display = 'none';
         }, 5000);
+    }
+}
+
+// ============================================================================
+// Review Workflow Settings
+// ============================================================================
+
+/**
+ * Get authentication token from localStorage
+ */
+function getAuthToken() {
+    return localStorage.getItem('auth_token');
+}
+
+/**
+ * Show message to user
+ */
+function showMessage(message, type) {
+    // Use the review-settings-status alert container
+    const containerId = 'review-settings-status';
+    showAlert(containerId, type, message);
+}
+
+/**
+ * Load review workflow settings from API
+ */
+async function loadReviewSettings() {
+    try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        const response = await fetch('/api/organizations/review-settings', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load review settings');
+        }
+
+        const settings = await response.json();
+
+        // Set review mode radio
+        const reviewModeRadio = document.querySelector(`input[name="review_mode"][value="${settings.review_mode}"]`);
+        if (reviewModeRadio) {
+            reviewModeRadio.checked = true;
+        }
+
+        // Set confidence threshold
+        const threshold = Math.round((settings.confidence_threshold || 0.90) * 100);
+        const slider = document.getElementById('confidence-threshold-slider');
+        if (slider) {
+            slider.value = threshold;
+            updateThresholdDisplay(threshold);
+        }
+
+        // Show/hide threshold section based on review mode
+        handleReviewModeChange({ target: reviewModeRadio });
+
+        // Display the summary (hide form, show display)
+        displayReviewSettingsSummary(settings);
+
+    } catch (error) {
+        console.error('Error loading review settings:', error);
+    }
+}
+
+/**
+ * Display review settings summary
+ */
+function displayReviewSettingsSummary(settings) {
+    const displayDiv = document.getElementById('review-settings-display');
+    const formDiv = document.getElementById('review-settings-form');
+
+    if (!displayDiv || !formDiv) return;
+
+    // Map review_mode to user-friendly text
+    const reviewModeLabels = {
+        'review_all': 'Review All Documents',
+        'smart': 'Smart Review',
+        'auto_upload': 'Auto-Upload All'
+    };
+
+    const reviewModeText = reviewModeLabels[settings.review_mode] || settings.review_mode;
+    document.getElementById('current-review-mode').textContent = reviewModeText;
+
+    // Show/hide threshold row based on mode
+    const thresholdRow = document.getElementById('current-threshold-row');
+    const thresholdSpan = document.getElementById('current-threshold');
+    if (settings.review_mode === 'smart') {
+        thresholdRow.style.display = 'flex';
+        const thresholdPercent = Math.round((settings.confidence_threshold || 0.90) * 100);
+        thresholdSpan.textContent = `${thresholdPercent}%`;
+    } else {
+        thresholdRow.style.display = 'none';
+    }
+
+    // Show summary, hide form
+    displayDiv.style.display = 'block';
+    formDiv.style.display = 'none';
+}
+
+/**
+ * Edit review settings (show form)
+ */
+function editReviewSettings() {
+    const displayDiv = document.getElementById('review-settings-display');
+    const formDiv = document.getElementById('review-settings-form');
+
+    if (!displayDiv || !formDiv) return;
+
+    // Hide summary, show form
+    displayDiv.style.display = 'none';
+    formDiv.style.display = 'block';
+
+    // Scroll to the review settings section
+    document.getElementById('review-settings-card').scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+}
+
+/**
+ * Handle review mode radio button change
+ */
+function handleReviewModeChange(event) {
+    const reviewMode = event.target.value;
+    const thresholdSection = document.getElementById('confidence-threshold-section');
+
+    // Show threshold section only for "smart" mode
+    if (thresholdSection) {
+        thresholdSection.style.display = reviewMode === 'smart' ? 'block' : 'none';
+    }
+}
+
+/**
+ * Update threshold display value
+ */
+function updateThresholdDisplay(value) {
+    const display = document.getElementById('threshold-value');
+    if (display) {
+        display.textContent = value;
+    }
+}
+
+/**
+ * Save review workflow settings
+ */
+async function saveReviewSettings() {
+    const saveBtn = document.getElementById('save-review-settings-btn');
+
+    try {
+        // Get selected review mode
+        const reviewMode = document.querySelector('input[name="review_mode"]:checked')?.value;
+        if (!reviewMode) {
+            showMessage('Please select a review mode', 'error');
+            return;
+        }
+
+        // Get confidence threshold (convert from percentage to decimal)
+        const thresholdValue = document.getElementById('confidence-threshold-slider')?.value;
+        const confidenceThreshold = parseFloat(thresholdValue) / 100;
+
+        // Disable button and show loading
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+        const token = getAuthToken();
+        if (!token) {
+            throw new Error('Authentication required');
+        }
+
+        // Send update request
+        console.log('Sending review settings update:', {
+            review_mode: reviewMode,
+            confidence_threshold: confidenceThreshold
+        });
+
+        const response = await fetch('/api/organizations/review-settings', {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                review_mode: reviewMode,
+                confidence_threshold: confidenceThreshold
+            })
+        });
+
+        console.log('Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+            let errorMessage = 'Failed to save review settings';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || errorMessage;
+            } catch (e) {
+                errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorMessage);
+        }
+
+        const result = await response.json();
+
+        // Show success message
+        showMessage('Review settings saved successfully!', 'success');
+
+        // Update button
+        saveBtn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+
+        // After a brief delay, hide the form and show the summary
+        setTimeout(() => {
+            saveBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save Review Settings';
+            saveBtn.disabled = false;
+
+            // Display the summary
+            displayReviewSettingsSummary({
+                review_mode: reviewMode,
+                confidence_threshold: confidenceThreshold
+            });
+        }, 1500);
+
+    } catch (error) {
+        console.error('Error saving review settings:', error);
+        showMessage('Failed to save review settings: ' + error.message, 'error');
+
+        // Reset button
+        saveBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save Review Settings';
+        saveBtn.disabled = false;
     }
 }

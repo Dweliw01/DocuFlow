@@ -5,6 +5,7 @@ Reads environment variables from .env file and provides app-wide settings.
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -35,9 +36,30 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Google Drive OAuth
+    google_oauth_client_id: str | None = None
+    google_oauth_client_secret: str | None = None
+    google_oauth_redirect_uri: str = "http://localhost:8000/api/connectors/google-drive/oauth-callback"
+
+    # Auth0 Settings
+    auth0_domain: str | None = None
+    auth0_client_id: str | None = None
+    auth0_client_secret: str | None = None
+    auth0_audience: str = "https://docuflow-api"
+
+    # Database
+    database_url: str = "sqlite:///./docuflow.db"
+
+    # Security
+    secret_key: str = "change-this-to-random-32-char-string-in-production"
+    encryption_key: str | None = None
+
+    # AI Learning / Few-Shot Learning
+    enable_few_shot_learning: bool = False  # Feature flag for Phase 3
+
     class Config:
         """Pydantic configuration"""
-        env_file = ".env"
+        env_file = str(Path(__file__).parent.parent / ".env")
         case_sensitive = False
 
     def __init__(self, **kwargs):

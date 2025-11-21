@@ -73,6 +73,51 @@ class FieldMappingService:
 
         return mapping
 
+    def auto_map_fields_with_confidence(
+        self,
+        extracted_data: ExtractedData,
+        target_fields: List[IndexField]
+    ) -> Tuple[Dict[str, str], Dict[str, float]]:
+        """
+        Intelligently map DocuFlow extracted fields with confidence scores.
+
+        Args:
+            extracted_data: Extracted data from document
+            target_fields: List of available fields in target system
+
+        Returns:
+            Tuple of (mapping, confidence_scores)
+            - mapping: Dict mapping source field names to target field names
+            - confidence_scores: Dict mapping target field names to confidence (0.0-1.0)
+
+            Example:
+                (
+                    {"vendor": "VENDOR_NAME", "amount": "TOTAL_AMOUNT"},
+                    {"VENDOR_NAME": 0.95, "TOTAL_AMOUNT": 0.87}
+                )
+        """
+        mapping = {}
+        confidence_scores = {}
+
+        # Get all non-null fields from extracted data
+        source_fields = self._get_populated_fields(extracted_data)
+
+        for source_field, source_value in source_fields.items():
+            # Skip line_items and other_data (handled separately)
+            if source_field in ['line_items', 'other_data']:
+                continue
+
+            # Find best matching target field with confidence score
+            best_match, confidence = self._find_best_match_with_confidence(
+                source_field, target_fields
+            )
+
+            if best_match:
+                mapping[source_field] = best_match.name
+                confidence_scores[best_match.name] = confidence
+
+        return mapping, confidence_scores
+
     def _get_populated_fields(self, extracted_data: ExtractedData) -> Dict[str, Any]:
         """
         Get dictionary of populated (non-null) fields from extracted data.
@@ -137,6 +182,51 @@ class FieldMappingService:
             return best_field
 
         return None
+
+    def _find_best_match_with_confidence(
+        self,
+        source_field: str,
+        target_fields: List[IndexField],
+        confidence_threshold: float = 0.6
+    ) -> Tuple[Optional[IndexField], float]:
+        """
+        Find the best matching target field with confidence score.
+
+        Args:
+            source_field: DocuFlow field name (e.g., "vendor")
+            target_fields: List of target system fields
+            confidence_threshold: Minimum confidence score (0.0 to 1.0)
+
+        Returns:
+            Tuple of (best_match, confidence_score)
+            - best_match: Best matching IndexField or None
+            - confidence_score: Match confidence (0.0 to 1.0)
+        """
+        best_score = 0.0
+        best_field = None
+
+        source_normalized = source_field.lower().replace('_', '').replace('-', '')
+
+        for target_field in target_fields:
+            target_normalized = target_field.name.lower().replace('_', '').replace('-', '')
+
+            # Calculate match score
+            score = self._calculate_match_score(
+                source_field,
+                source_normalized,
+                target_field.name,
+                target_normalized
+            )
+
+            if score > best_score:
+                best_score = score
+                best_field = target_field
+
+        # Return match only if confidence is above threshold
+        if best_score >= confidence_threshold:
+            return best_field, best_score
+
+        return None, 0.0
 
     def _calculate_match_score(
         self,

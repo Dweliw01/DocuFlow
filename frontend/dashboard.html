@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DocuFlow</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <svg class="brand-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="url(#gradient)"/>
+                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#0066cc"/>
+                            <stop offset="100%" stop-color="#0052a3"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="brand-name">DocuFlow</span>
+            </div>
+            <div class="nav-links">
+                <a href="/dashboard.html" class="nav-link nav-link-active">Dashboard</a>
+                <a href="/settings.html" class="nav-link">Settings</a>
+                <span class="nav-status">
+                    <span class="status-dot"></span>
+                    System Online
+                </span>
+                <div id="userInfo" style="display: flex; align-items: center; margin-left: 1rem;"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="app-container" style="padding: 2rem 1rem; max-width: 1400px; margin: 0 auto;">
+        <!-- Subscription Status Banner -->
+        <div id="subscriptionBanner" style="display: none;"></div>
+
+        <!-- Dashboard Header -->
+        <div style="margin-bottom: 2rem;">
+            <h1 style="font-size: 2rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.5rem;">
+                Dashboard
+            </h1>
+            <p style="color: var(--gray-600); font-size: 1rem;">
+                Welcome back! Here's an overview of your document processing activity.
+            </p>
+        </div>
+
+        <!-- Stats Overview -->
+        <div id="statsOverview" style="
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        ">
+            <!-- Stats cards will be injected here by JavaScript -->
+        </div>
+
+        <!-- Main Content Area (switches between upload, processing, and results) -->
+        <div id="mainContentArea">
+
+        <!-- Main Dashboard Content (Hidden during processing) -->
+        <div id="uploadSection">
+        <!-- Main Content Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+            <!-- Upload Zone Card -->
+            <div style="
+                background: white;
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-md);
+                padding: 2rem;
+                border: 2px solid var(--gray-100);
+            ">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: #0066cc;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="2">
+                            <path d="M10 4v12M4 10h12" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">Upload Documents</h2>
+                        <p style="font-size: 0.875rem; color: var(--gray-600);">Process new PDFs with AI</p>
+                    </div>
+                </div>
+
+                <div class="upload-zone" id="uploadBox" style="
+                    border: 2px dashed var(--gray-300);
+                    border-radius: var(--radius-lg);
+                    padding: 2rem;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    background: var(--gray-50);
+                    margin-bottom: 1rem;
+                ">
+                    <div class="upload-zone-content">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin: 0 auto 1rem;">
+                            <circle cx="24" cy="24" r="22" fill="#f0f4ff" stroke="#6366f1" stroke-width="2" stroke-dasharray="3 3"/>
+                            <path d="M24 16v16M16 24h16" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+                            <path d="M20 20l4-4 4 4" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <h3 style="font-size: 1rem; font-weight: 600; color: var(--gray-900); margin-bottom: 0.5rem;">
+                            Drop PDFs here or click to browse
+                        </h3>
+                        <p style="font-size: 0.875rem; color: var(--gray-600); margin-bottom: 1rem;">
+                            Supports up to 100 files, max 50MB each
+                        </p>
+                        <input type="file" id="fileInput" multiple accept=".pdf" hidden>
+                        <button id="browseBtn" class="btn btn-primary" style="margin: 0 auto;">
+                            Select Files
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Files -->
+                <div id="fileList" class="file-list hidden"></div>
+
+                <!-- Upload Actions -->
+                <div id="uploadControls" class="upload-actions hidden" style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                    <button id="uploadBtn" class="btn btn-primary" style="flex: 1;">
+                        Process Documents
+                    </button>
+                    <button id="clearBtn" class="btn btn-secondary">Clear</button>
+                </div>
+            </div>
+
+            <!-- Quick Stats & Usage Card -->
+            <div style="
+                background: white;
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-md);
+                padding: 2rem;
+                border: 2px solid var(--gray-100);
+            ">
+                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, #10b981, #059669);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="2">
+                            <path d="M3 10h14M10 3l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">Quick Actions</h2>
+                        <p style="font-size: 0.875rem; color: var(--gray-600);">Common tasks</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <a href="/settings.html" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 1rem;
+                        background: var(--gray-50);
+                        border-radius: var(--radius-lg);
+                        text-decoration: none;
+                        color: var(--gray-900);
+                        transition: all 0.2s;
+                        border: 1px solid var(--gray-200);
+                    " onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='var(--gray-50)'">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" style="color: var(--gray-600);">
+                                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                            </svg>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.875rem;">Configure Connectors</div>
+                                <div style="font-size: 0.75rem; color: var(--gray-600);">Set up DocuWare, Google Drive</div>
+                            </div>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: var(--gray-400);">
+                            <path d="M6 3l5 5-5 5V3z"/>
+                        </svg>
+                    </a>
+
+                    <a href="#recentActivity" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 1rem;
+                        background: var(--gray-50);
+                        border-radius: var(--radius-lg);
+                        text-decoration: none;
+                        color: var(--gray-900);
+                        transition: all 0.2s;
+                        border: 1px solid var(--gray-200);
+                    " onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='var(--gray-50)'" onclick="document.getElementById('recentActivity').scrollIntoView({behavior: 'smooth'}); return false;">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" style="color: var(--gray-600);">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.875rem;">View Processing History</div>
+                                <div style="font-size: 0.75rem; color: var(--gray-600);">See recent document batches</div>
+                            </div>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: var(--gray-400);">
+                            <path d="M6 3l5 5-5 5V3z"/>
+                        </svg>
+                    </a>
+
+                    <button id="viewDocsBtn" onclick="alert('DocuFlow documentation coming soon! For now, check the Settings page to configure connectors.')" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 1rem;
+                        background: var(--gray-50);
+                        border-radius: var(--radius-lg);
+                        border: 1px solid var(--gray-200);
+                        cursor: pointer;
+                        transition: all 0.2s;
+                        width: 100%;
+                        text-align: left;
+                    " onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='var(--gray-50)'">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" style="color: var(--gray-600);">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.875rem;">View Documentation</div>
+                                <div style="font-size: 0.75rem; color: var(--gray-600);">Learn how to use DocuFlow</div>
+                            </div>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: var(--gray-400);">
+                            <path d="M6 3l5 5-5 5V3z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Review Documents Section -->
+        <div id="pendingReviewSection" style="
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            padding: 2rem;
+            border: 2px solid var(--gray-100);
+            margin-bottom: 2rem;
+            display: none;
+        ">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, #3b82f6, #2563eb);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <i class="fa-solid fa-clipboard-check" style="color: white; font-size: 1.25rem;"></i>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">
+                            Pending Review
+                            <span id="pendingCount" style="
+                                background: #3b82f6;
+                                color: white;
+                                padding: 0.25rem 0.5rem;
+                                border-radius: 9999px;
+                                font-size: 0.75rem;
+                                margin-left: 0.5rem;
+                            "></span>
+                        </h2>
+                        <p style="font-size: 0.875rem; color: var(--gray-600);">Documents requiring manual review before upload</p>
+                    </div>
+                </div>
+            </div>
+            <div id="pendingDocuments">
+                <!-- Pending documents will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Recent Activity Section -->
+        <div style="
+            background: white;
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-md);
+            padding: 2rem;
+            border: 2px solid var(--gray-100);
+            margin-bottom: 2rem;
+        ">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div style="
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="2">
+                            <circle cx="10" cy="10" r="7" stroke-linecap="round"/>
+                            <path d="M10 6v4l3 2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">Recent Activity</h2>
+                        <p style="font-size: 0.875rem; color: var(--gray-600);">Your latest document processing jobs</p>
+                    </div>
+                </div>
+                <button id="refreshActivityBtn" style="
+                    padding: 0.5rem 1rem;
+                    background: var(--gray-100);
+                    border: none;
+                    border-radius: 0.5rem;
+                    font-weight: 600;
+                    font-size: 0.875rem;
+                    color: var(--gray-700);
+                    cursor: pointer;
+                    transition: all 0.2s;
+                " onmouseover="this.style.background='var(--gray-200)'" onmouseout="this.style.background='var(--gray-100)'">
+                    Refresh
+                </button>
+            </div>
+            <div id="recentActivity">
+                <!-- Recent batches will be loaded here -->
+                <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" style="margin: 0 auto 1rem; opacity: 0.5;">
+                        <circle cx="24" cy="24" r="22" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/>
+                        <path d="M24 16v16M16 24h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <p>No recent activity. Upload documents to get started!</p>
+                </div>
+            </div>
+        </div>
+        </div><!-- End uploadSection -->
+
+        <!-- Processing Section -->
+        <div id="processingSection" class="hidden" style="margin-bottom: 2rem;">
+            <div style="
+                background: white;
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-md);
+                padding: 2rem;
+                border: 2px solid var(--gray-100);
+            ">
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                    <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.5rem;">
+                        Processing Your Documents
+                    </h2>
+                    <p id="processingStatus" style="color: var(--gray-600);">Initializing AI engine...</p>
+                </div>
+                <div class="progress-container" style="margin-bottom: 2rem;">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                </div>
+                <div id="processingDetails" class="processing-log" style="
+                    max-height: 400px;
+                    overflow-y: auto;
+                    background: var(--gray-50);
+                    border-radius: var(--radius-lg);
+                    padding: 1rem;
+                "></div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden" style="margin-bottom: 2rem;">
+            <div style="
+                background: white;
+                border-radius: var(--radius-xl);
+                box-shadow: var(--shadow-md);
+                padding: 2rem;
+                border: 2px solid var(--gray-100);
+                margin-bottom: 2rem;
+            ">
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <div style="
+                        width: 64px;
+                        height: 64px;
+                        margin: 0 auto 1rem;
+                        background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <path d="M8 16l6 6 12-12" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.5rem;">
+                        Processing Complete
+                    </h2>
+                    <p style="color: var(--gray-600);">Your documents have been organized and data has been extracted</p>
+                </div>
+
+                <!-- Summary Stats -->
+                <div id="resultsSummary" class="stats-grid" style="margin-bottom: 2rem;"></div>
+
+                <!-- Results -->
+                <div id="resultsDetails" class="results-content"></div>
+
+                <!-- Actions -->
+                <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
+                    <button id="downloadBtn" class="btn btn-primary btn-xl">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/>
+                        </svg>
+                        Download Organized Documents
+                    </button>
+                    <button id="newBatchBtn" class="btn btn-secondary">Process New Batch</button>
+                </div>
+            </div>
+        </div>
+
+        </div><!-- End mainContentArea -->
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <svg class="footer-icon" width="24" height="24" viewBox="0 0 32 32" fill="none">
+                    <rect width="32" height="32" rx="8" fill="#0066cc"/>
+                    <path d="M10 12h12M10 16h12M10 20h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient2" x1="0" y1="0" x2="32" y2="32">
+                            <stop offset="0%" stop-color="#0066cc"/>
+                            <stop offset="100%" stop-color="#0052a3"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span>DocuFlow</span>
+            </div>
+            <div class="footer-text">
+                AI-Powered Document Processing • Secure • Fast • Reliable
+            </div>
+        </div>
+    </footer>
+
+    <!-- Auth0 SPA SDK -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+
+    <!-- Authentication utilities -->
+    <script src="auth.js"></script>
+
+    <!-- Main application -->
+    <script src="app.js?v=21"></script>
+
+    <script>
+        // Check authentication on page load
+        (async () => {
+            const authenticated = await requireAuth();
+            if (authenticated) {
+                await displayUserInfo();
+                await loadDashboard();
+            }
+        })();
+    </script>
+</body>
+</html>

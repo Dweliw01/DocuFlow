@@ -8,6 +8,197 @@ from enum import Enum
 from datetime import datetime
 
 
+# ============================================================================
+# User Models - Authentication and Authorization
+# ============================================================================
+
+
+class User(BaseModel):
+    """
+    User account model.
+    Represents an authenticated user in the system.
+    """
+    id: int
+    auth0_user_id: str
+    email: str
+    name: Optional[str] = None
+    organization_id: Optional[int] = None  # Link to organization
+    role: Optional[str] = "member"  # owner/admin/member
+    created_at: datetime
+    last_login: Optional[datetime] = None
+
+
+class Auth0Config(BaseModel):
+    """
+    Auth0 configuration for frontend.
+    Returned to client for authentication setup.
+    """
+    domain: str
+    client_id: str
+    audience: str
+
+
+class LoginResponse(BaseModel):
+    """
+    Response after successful login.
+    Contains user info and access token.
+    """
+    user: User
+    message: str = "Login successful"
+
+
+# ============================================================================
+# Multi-Tenant Organization Models
+# ============================================================================
+
+
+class Organization(BaseModel):
+    """
+    Organization/tenant model.
+    Represents a customer business using DocuFlow.
+    """
+    id: int
+    name: str
+    created_at: datetime
+    subscription_plan: str = "trial"  # trial/starter/pro/enterprise/custom
+    billing_email: Optional[str] = None
+    status: str = "active"  # active/suspended/trial/cancelled
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class OrganizationCreate(BaseModel):
+    """
+    Request model for creating a new organization.
+    Used during user onboarding.
+    """
+    name: str
+    billing_email: str
+    subscription_plan: str = "trial"
+
+
+class OrganizationUpdate(BaseModel):
+    """
+    Request model for updating organization details.
+    """
+    name: Optional[str] = None
+    billing_email: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class OrganizationSettings(BaseModel):
+    """
+    Organization-level settings model.
+    Replaces user-level connector configurations.
+    """
+    id: int
+    organization_id: int
+    connector_type: str  # docuware/google_drive
+    config_encrypted: str  # Encrypted JSON
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    created_by_user_id: Optional[int] = None
+
+
+class Subscription(BaseModel):
+    """
+    Subscription/billing configuration for an organization.
+    Supports multiple billing models.
+    """
+    id: int
+    organization_id: int
+    plan_type: str = "per_document"  # per_document/tiered/custom
+
+    # Per-document billing
+    price_per_document: Optional[float] = 0.10
+
+    # Tiered billing
+    monthly_base_fee: Optional[float] = None
+    monthly_document_limit: Optional[int] = None
+    overage_price_per_document: Optional[float] = None
+
+    # Payment integration
+    stripe_customer_id: Optional[str] = None
+    stripe_subscription_id: Optional[str] = None
+
+    # Billing cycle
+    billing_cycle_start: Optional[datetime] = None
+    current_period_start: Optional[datetime] = None
+    current_period_end: Optional[datetime] = None
+
+    # Status
+    status: str = "active"  # active/past_due/cancelled
+
+    created_at: datetime
+    updated_at: datetime
+
+
+class SubscriptionUpdate(BaseModel):
+    """
+    Request model for updating subscription.
+    """
+    plan_type: Optional[str] = None
+    price_per_document: Optional[float] = None
+    monthly_base_fee: Optional[float] = None
+    monthly_document_limit: Optional[int] = None
+    overage_price_per_document: Optional[float] = None
+
+
+class UsageLog(BaseModel):
+    """
+    Usage tracking log for billing.
+    Records all billable actions.
+    """
+    id: int
+    organization_id: int
+    user_id: Optional[int] = None
+    action_type: str  # document_upload/document_processed/ocr_extraction
+    document_count: int = 1
+    timestamp: datetime
+    metadata: Optional[Dict[str, Any]] = None
+    billed: bool = False
+    billing_period: Optional[str] = None  # e.g., "2025-01"
+
+
+class UsageStats(BaseModel):
+    """
+    Aggregated usage statistics for an organization.
+    Used for displaying current usage in UI.
+    """
+    organization_id: int
+    billing_period: str
+    total_documents_processed: int
+    total_documents_uploaded: int
+    total_ocr_extractions: int
+    total_cost: float
+    documents_by_category: Dict[str, int] = Field(default_factory=dict)
+    usage_by_user: Dict[str, int] = Field(default_factory=dict)
+
+
+class OrganizationUserInvite(BaseModel):
+    """
+    Request model for inviting a user to an organization.
+    """
+    email: str
+    role: str = "member"  # owner/admin/member
+    name: Optional[str] = None
+
+
+class OrganizationWithUsers(BaseModel):
+    """
+    Organization model with user list.
+    Used for admin pages.
+    """
+    organization: Organization
+    users: List[User]
+    subscription: Optional[Subscription] = None
+
+
+# ============================================================================
+# Document Processing Models
+# ============================================================================
+
+
 class DocumentCategory(str, Enum):
     """
     Supported document categories for classification.
@@ -84,6 +275,7 @@ class DocumentResult(BaseModel):
     Result of processing a single document.
     Contains categorization info, confidence score, extracted text preview, and structured data.
     """
+    id: Optional[int] = None  # Document database ID (for review/edit functionality)
     filename: str
     original_path: str
     category: DocumentCategory
@@ -91,6 +283,8 @@ class DocumentResult(BaseModel):
     processed_path: Optional[str] = None
     extracted_text_preview: str  # First 500 chars of extracted text
     extracted_data: Optional[ExtractedData] = None  # Structured data extracted from document
+    connector_type: Optional[str] = None  # Which connector this document was processed with
+    connector_config_snapshot: Optional[str] = None  # Connector config snapshot for historical field display
     error: Optional[str] = None
     processing_time: float  # seconds
     upload_result: Optional['UploadResult'] = None  # Result of connector upload (if configured)
@@ -151,6 +345,27 @@ class ConnectorType(str, Enum):
     ONEDRIVE = "onedrive"
 
 
+class FolderStructureLevel(str, Enum):
+    """
+    Available folder organization levels for dynamic folder structure.
+    Users can configure primary, secondary, and tertiary folder levels.
+    """
+    CATEGORY = "category"  # Document category (Invoice, Receipt, Contract, etc.)
+    VENDOR = "vendor"  # Vendor/supplier name
+    CLIENT = "client"  # Client/customer name
+    COMPANY = "company"  # Company name (general)
+    YEAR = "year"  # Year from document date (2025, 2024, etc.)
+    YEAR_MONTH = "year_month"  # Year-Month from document date (2025-01, 2025-02, etc.)
+    MONTH = "month"  # Month name from document date (January, February, etc.)
+    QUARTER = "quarter"  # Quarter from document date (Q1, Q2, Q3, Q4)
+    DOCUMENT_TYPE = "document_type"  # Specific document type (Purchase Invoice, W2, etc.)
+    DOCUMENT_NUMBER = "document_number"  # Document number (Invoice #, Receipt #, etc.)
+    PERSON_NAME = "person_name"  # Person name (for HR/personal docs)
+    PROJECT = "project"  # Project name or code
+    CUSTOM = "custom"  # Custom field (user-defined)
+    NONE = "none"  # No folder level (skip)
+
+
 class FileCabinet(BaseModel):
     """
     DocuWare file cabinet (or equivalent storage location in other systems).
@@ -173,29 +388,30 @@ class TableColumn(BaseModel):
     """
     Column definition for a DocuWare table field.
     """
-    name: str
-    type: str  # Text, Date, Decimal, Integer, etc.
-    max_length: Optional[int] = None
+    name: str  # Column field name (e.g., ITEM__PRODUCT_SERVICE)
+    label: str  # Column display label (e.g., ITEM NUMBER)
+    type: str  # Data type (String, Decimal, Int, etc.)
+    required: bool = False
 
 
 class IndexField(BaseModel):
     """
     Document index field in DocuWare (metadata field).
-    Can be a regular field or a table field with columns.
     """
     name: str
     type: str  # Text, Date, Decimal, Integer, Table, etc.
     required: bool
     max_length: Optional[int] = None
     validation: Optional[str] = None
-    is_table_field: bool = False
-    columns: Optional[List['TableColumn']] = None  # For table fields only
+    is_system_field: bool = False  # True for DocuWare system fields (DWDOCID, etc.)
+    is_table_field: bool = False  # True for table fields
+    table_columns: Optional[List['TableColumn']] = None  # Column definitions if this is a table field
 
 
 class DocuWareConfig(BaseModel):
     """
     DocuWare connector configuration.
-    Stores connection details and field mapping.
+    Stores connection details and selected fields for AI extraction.
     """
     server_url: str
     username: str
@@ -204,17 +420,29 @@ class DocuWareConfig(BaseModel):
     cabinet_name: str
     dialog_id: str
     dialog_name: str
-    field_mapping: Dict[str, str]  # DocuFlow field -> DocuWare field
+    selected_fields: List[str]  # List of DocuWare field names to extract
+    selected_table_columns: Optional[Dict[str, List[Dict[str, str]]]] = Field(default_factory=dict)  # Table field name -> list of column definitions
 
 
 class GoogleDriveConfig(BaseModel):
     """
-    Google Drive connector configuration (future).
+    Google Drive connector configuration.
+    Stores OAuth2 credentials and folder preferences.
     """
-    access_token: str
-    refresh_token: str
-    folder_id: Optional[str] = None
-    folder_name: Optional[str] = None
+    refresh_token: str  # OAuth2 refresh token
+    client_id: str  # OAuth2 client ID
+    client_secret: str  # OAuth2 client secret
+    root_folder_name: Optional[str] = "DocuFlow"  # Root folder name in Drive
+    root_folder_id: Optional[str] = None  # Cached root folder ID
+    auto_create_folders: bool = True  # Auto-create category subfolders
+
+    # Dynamic folder structure configuration
+    primary_level: FolderStructureLevel = FolderStructureLevel.CATEGORY  # First folder level
+    primary_custom_field: Optional[str] = None  # Custom field name if primary_level is CUSTOM
+    secondary_level: FolderStructureLevel = FolderStructureLevel.VENDOR  # Second folder level
+    secondary_custom_field: Optional[str] = None  # Custom field name if secondary_level is CUSTOM
+    tertiary_level: FolderStructureLevel = FolderStructureLevel.NONE  # Third folder level (optional)
+    tertiary_custom_field: Optional[str] = None  # Custom field name if tertiary_level is CUSTOM
 
 
 class OneDriveConfig(BaseModel):

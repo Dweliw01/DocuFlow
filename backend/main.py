@@ -5,10 +5,16 @@ Configures the web server, middleware, and routes.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from routes import upload
-from routes import connector_routes
-from config import settings
+from backend.routes import upload
+from backend.routes import connector_routes
+from backend.routes import auth_routes
+from backend.routes import organization_routes
+from backend.routes import document_routes
+from backend.config import settings
+from backend.database import init_database
 import os
+import logging
+import sys
 
 # Create FastAPI application
 app = FastAPI(
@@ -20,18 +26,24 @@ app = FastAPI(
 )
 
 # CORS middleware - allows frontend to call API
-# In production, replace "*" with specific frontend URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",  # For development with separate frontend
+    ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
 )
 
-# Include API routes with /api prefix
+# Include API routes
+app.include_router(auth_routes.router, tags=["authentication"])
+app.include_router(organization_routes.router, tags=["organizations"])
 app.include_router(upload.router, prefix="/api", tags=["documents"])
 app.include_router(connector_routes.router, tags=["connectors"])
+app.include_router(document_routes.router, tags=["documents"])
 
 # Serve frontend static files (HTML, CSS, JS)
 # This must come LAST to avoid overriding API routes
@@ -62,17 +74,48 @@ async def health_check():
 async def startup_event():
     """
     Run on application startup.
-    Print configuration and status information.
+    Configure logging, initialize database, and print configuration info.
     """
+    # Configure logging to output to console with colored formatting
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    # Set specific log levels for different modules
+    logging.getLogger('uvicorn.access').setLevel(logging.WARNING)  # Reduce uvicorn noise
+    logging.getLogger('uvicorn.error').setLevel(logging.INFO)
+
+    # Application loggers
+    logging.getLogger('backend.connectors').setLevel(logging.DEBUG)  # DEBUG for connectors to see auth issues
+    logging.getLogger('connectors.docuware_connector').setLevel(logging.DEBUG)  # DEBUG for DocuWare
+    logging.getLogger('backend.services').setLevel(logging.INFO)
+    logging.getLogger('backend.routes').setLevel(logging.INFO)
+
+    # Initialize database
+    try:
+        await init_database()
+        print("[OK] Database initialized")
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize database: {str(e)}")
+        raise
+
     print("\n" + "=" * 60)
-    print("Document Digitization MVP")
+    print("DocuFlow - Document Digitization Platform")
     print("=" * 60)
     print(f"Server: http://{settings.host}:{settings.port}")
     print(f"API Docs: http://{settings.host}:{settings.port}/docs")
+    print(f"Auth: {'Auth0 (' + settings.auth0_domain + ')' if settings.auth0_domain else 'Not configured'}")
     print(f"AI: Claude Haiku")
     print(f"OCR: {'Google Vision' if settings.use_google_vision else 'Tesseract (free)'}")
     print(f"Max file size: {settings.max_file_size}MB")
     print(f"Concurrent processing: {settings.max_concurrent_processing}")
+    print(f"Database: {settings.database_url}")
+    print(f"Logging: INFO level enabled")
     print("=" * 60 + "\n")
 
 
@@ -82,7 +125,7 @@ async def shutdown_event():
     Run on application shutdown.
     Clean up resources if needed.
     """
-    print("\n🛑 Shutting down Document Digitization Service...")
+    print("\n[SHUTDOWN] Shutting down Document Digitization Service...")
 
 
 # Run the application (for development)

@@ -1,0 +1,74 @@
+SPANISH]
+
+FOOD SOLUTIONS.«
+
+SFS - Customer Purchase Order Form
+
+Purchase Order Number
+10804
+
+SFS Vendor P.O. Date Ordered
+11/06/2025
+
+SFS Vendor
+SFS Inventory
+
+Sales Rep
+
+Table
+ITEM NUMBER DESCRIPTION
+
+MD042 Seven Seas Sweet Plantain Slices
+4/6lb
+
+Notes
+Customer would like to pick up Friday 11/7/25
+
+Container PO# 6761
+
+potential comments or requirements from customers
+
+Customer
+SevenSeas
+
+Customer Region
+NE
+
+Customer P.O. Delivery Address
+
+760B Port Carteret Dr.
+
+City
+
+Carteret
+
+State ZIP
+NJ 07008
+
+Customer P.O. Date Ordered
+11/05/2025
+
+Customer P.O. Delivery Date
+
+Customer P.O. Pick Up Date
+11/07/2025
+
+Lead Time
+
+Container Configuration
+
+Palletized
+
+Customer PO#
+Email dated 11/5/25
+
+QTY
+
+90
+
+RATE
+
+26.44
+
+
+--- Page Break ---

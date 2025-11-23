@@ -1,0 +1,201 @@
+
+# >>>>>>>>>>>>>>>>>>>>>> ERROR REPORT <<<<<<<<<<<<<<<<<<<<<<
+
+    Traceback (most recent call last):
+      File "C:\Users\Dusha\anaconda3\Lib\site-packages\conda\exception_handler.py", line 18, in __call__
+        return func(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^
+      File "C:\Users\Dusha\anaconda3\Lib\site-packages\conda\cli\main.py", line 61, in main_subshell
+        exit_code = do_call(args, parser)
+                    ^^^^^^^^^^^^^^^^^^^^^
+      File "C:\Users\Dusha\anaconda3\Lib\site-packages\conda\cli\conda_argparse.py", line 205, in do_call
+        result = getattr(module, func_name)(args, parser)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "C:\Users\Dusha\anaconda3\Lib\site-packages\conda\cli\main_run.py", line 118, in execute
+        print(response.stdout, file=sys.stdout)
+      File "C:\Users\Dusha\anaconda3\Lib\encodings\cp1252.py", line 19, in encode
+        return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    UnicodeEncodeError: 'charmap' codec can't encode character '\ufffd' in position 627: character maps to <undefined>
+
+`$ C:\Users\Dusha\anaconda3\Scripts\conda-script.py run -n filebuddy python scripts/benchmark_ocr.py`
+
+  environment variables:
+             ACLOCAL_PATH=C:\Program Files\Git\mingw64\share\aclocal;C:\Program
+                          Files\Git\usr\share\aclocal
+                 CIO_TEST=<not set>
+    CONDA_ALLOW_SOFTLINKS=false
+        CONDA_DEFAULT_ENV=base
+                CONDA_EXE=C:/Users/Dusha/anaconda3/Scripts/conda.exe
+             CONDA_PREFIX=C:\Users\Dusha\anaconda3
+    CONDA_PROMPT_MODIFIER=(base)
+         CONDA_PYTHON_EXE=C:/Users/Dusha/anaconda3/python.exe
+               CONDA_ROOT=C:\Users\Dusha\anaconda3
+              CONDA_SHLVL=1
+           CURL_CA_BUNDLE=<not set>
+                  EXEPATH=C:\Program Files\Git\bin
+                 HOMEPATH=\Users\Dusha
+                 INFOPATH=C:\Program Files\Git\mingw64\local\info;C:\Program
+                          Files\Git\mingw64\share\info;C:\Program
+                          Files\Git\usr\local\info;C:\Program
+                          Files\Git\usr\share\info;C:\Program Files\Git\usr\info;C:\Program
+                          Files\Git\share\info
+               LD_PRELOAD=<not set>
+                  MANPATH=C:\Program Files\Git\mingw64\local\man;C:\Program
+                          Files\Git\mingw64\share\man;C:\Program
+                          Files\Git\usr\local\man;C:\Program Files\Git\usr\share\man;C:\Program
+                          Files\Git\usr\man;C:\Program Files\Git\share\man
+NODEFAULTCURRENTDIRECTORYINEXEPATH=1
+            ORIGINAL_PATH=C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Users
+                          \Dusha\bin;C:\Users\Dusha\anaconda3;C:\Users\Dusha\anaconda3\Library\m
+                          ingw-
+                          w64\bin;C:\Users\Dusha\anaconda3\Library\usr\bin;C:\Users\Dusha\anacon
+                          da3\Library\bin;C:\Users\Dusha\anaconda3\Scripts;C:\Users\Dusha\anacon
+                          da3\bin;C:\Users\Dusha\AppData\Local\Programs\cursor\resources\app\bin
+                          ;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Users\Dusha\.m2
+                          \repository\org\apache\maven\maven\3.0;C:\WINDOWS\system32;C:\WINDOWS;
+                          C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0;C:
+                          \WINDOWS\System32\OpenSSH;C:\Program Files\Java\jdk-17\bin;C:\Program
+                          Files\Git\cmd;C:\Program Files\dotnet;C:\Users\Dusha\AppData\Local\Pro
+                          grams\Python\Python312\Scripts;C:\Users\Dusha\AppData\Local\Programs\P
+                          ython\Python312;C:\Users\Dusha\AppData\Local\Programs\Python\Launcher;
+                          C:\Users\Dusha\AppData\Local\Microsoft\WindowsApps;.;C:\Users\Dusha\Ap
+                          pData\Local\Programs\Ollama;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\
+                          System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0;C:\WINDOWS\Sy
+                          stem32\OpenSSH;C:\Program
+                          Files\nodejs;C:\Users\Dusha\OneDrive\Desktop\Python Projects\wger-ai-
+                          fitness\wger-ai-fitnes\flutter\bin;C:\Users\Dusha\anaconda3;C:\Users\D
+                          usha\anaconda3\Library\mingw-
+                          w64\bin;C:\Users\Dusha\anaconda3\Library\usr\bin;C:\Users\Dusha\anacon
+                          da3\Library\bin;C:\Users\Dusha\anaconda3\Scripts;C:\Users\Dusha\anacon
+                          da3\bin;C:\Users\Dusha\anaconda3\condabin;C:\Users\Dusha\AppData\Local
+                          \Programs\cursor\resources\app\bin;C:\Program Files\Common Files\Oracl
+                          e\Java\javapath;C:\Users\Dusha\.m2\repository\org\apache\maven\maven\3
+                          .0;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\
+                          System32\WindowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C:\Program
+                          Files\Java\jdk-17\bin;C:\Program Files\Git\cmd;C:\Program Files\dotnet
+                          ;C:\Users\Dusha\AppData\Local\Programs\Python\Python312\Scripts;C:\Use
+                          rs\Dusha\AppData\Local\Programs\Python\Python312;C:\Users\Dusha\AppDat
+                          a\Local\Programs\Python\Launcher;C:\Users\Dusha\AppData\Local\Microsof
+                          t\WindowsApps;.;C:\Users\Dusha\AppData\Local\Programs\Ollama;C:\WINDOW
+                          S\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\Win
+                          dowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C:\Program Files\nodej
+                          s;C:\Users\Dusha\anaconda3;C:\Users\Dusha\anaconda3\Scripts;C:\Users\D
+                          usha\anaconda3\Library\bin;C:\Users\Dusha\AppData\Local\Programs\Pytho
+                          n\Python312\Scripts;C:\Users\Dusha\AppData\Local\Programs\Python\Pytho
+                          n312;C:\Users\Dusha\AppData\Local\Programs\Python\Launcher;C:\Users\Du
+                          sha\AppData\Local\Microsoft\WindowsApps;C:\Users\Dusha\AppData\Local\P
+                          rograms\Ollama;C:\Users\Dusha\AppData\Local\Programs\cursor\resources\
+                          app\bin;C:\Users\Dusha\AppData\Roaming\npm;C:\Users\Dusha\AppData\Loca
+                          l\Programs\Windsurf\bin;C:\Users\Dusha\ngrok\ngrok.exe;C:\Program
+                          Files\Git\usr\bin;C:\Users\Dusha\AppData\Local\Programs\Microsoft VS C
+                          ode\bin;C:\ngrok;C:\ngrok;C:\Users\Dusha\AppData\Local\Programs\Tesser
+                          act-OCR;C:\Users\Dusha\OneDrive\Desktop\Python
+                          Projects\FileBot\poppler-25.07.0\Library\bin;.
+                     PATH=C:\Users\Dusha\bin;C:\Program Files\Git\mingw64\bin;C:\Program
+                          Files\Git\usr\local\bin;C:\Program Files\Git\usr\bin;C:\Program
+                          Files\Git\usr\bin;C:\Program Files\Git\mingw64\bin;C:\Program Files\Gi
+                          t\usr\bin;C:\Users\Dusha\bin;C:\Users\Dusha\anaconda3;C:\Users\Dusha\a
+                          naconda3\Library\mingw-
+                          w64\bin;C:\Users\Dusha\anaconda3\Library\usr\bin;C:\Users\Dusha\anacon
+                          da3\Library\bin;C:\Users\Dusha\anaconda3\Scripts;C:\Users\Dusha\anacon
+                          da3\bin;C:\Users\Dusha\AppData\Local\Programs\cursor\resources\app\bin
+                          ;C:\Program Files\Common Files\Oracle\Java\javapath;C:\Users\Dusha\.m2
+                          \repository\org\apache\maven\maven\3.0;C:\WINDOWS\system32;C:\WINDOWS;
+                          C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0;C:
+                          \WINDOWS\System32\OpenSSH;C:\Program Files\Java\jdk-17\bin;C:\Program
+                          Files\Git\cmd;C:\Program Files\dotnet;C:\Users\Dusha\AppData\Local\Pro
+                          grams\Python\Python312\Scripts;C:\Users\Dusha\AppData\Local\Programs\P
+                          ython\Python312;C:\Users\Dusha\AppData\Local\Programs\Python\Launcher;
+                          C:\Users\Dusha\AppData\Local\Microsoft\WindowsApps;.;C:\Users\Dusha\Ap
+                          pData\Local\Programs\Ollama;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\
+                          System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0;C:\WINDOWS\Sy
+                          stem32\OpenSSH;C:\Program
+                          Files\nodejs;C:\Users\Dusha\OneDrive\Desktop\Python Projects\wger-ai-
+                          fitness\wger-ai-fitnes\flutter\bin;C:\Users\Dusha\anaconda3;C:\Users\D
+                          usha\anaconda3\Library\mingw-
+                          w64\bin;C:\Users\Dusha\anaconda3\Library\usr\bin;C:\Users\Dusha\anacon
+                          da3\Library\bin;C:\Users\Dusha\anaconda3\Scripts;C:\Users\Dusha\anacon
+                          da3\bin;C:\Users\Dusha\anaconda3\condabin;C:\Users\Dusha\AppData\Local
+                          \Programs\cursor\resources\app\bin;C:\Program Files\Common Files\Oracl
+                          e\Java\javapath;C:\Users\Dusha\.m2\repository\org\apache\maven\maven\3
+                          .0;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\
+                          System32\WindowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C:\Program
+                          Files\Java\jdk-17\bin;C:\Program Files\Git\cmd;C:\Program Files\dotnet
+                          ;C:\Users\Dusha\AppData\Local\Programs\Python\Python312\Scripts;C:\Use
+                          rs\Dusha\AppData\Local\Programs\Python\Python312;C:\Users\Dusha\AppDat
+                          a\Local\Programs\Python\Launcher;C:\Users\Dusha\AppData\Local\Microsof
+                          t\WindowsApps;.;C:\Users\Dusha\AppData\Local\Programs\Ollama;C:\WINDOW
+                          S\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\Win
+                          dowsPowerShell\v1.0;C:\WINDOWS\System32\OpenSSH;C:\Program Files\nodej
+                          s;C:\Users\Dusha\anaconda3;C:\Users\Dusha\anaconda3\Scripts;C:\Users\D
+                          usha\anaconda3\Library\bin;C:\Users\Dusha\AppData\Local\Programs\Pytho
+                          n\Python312\Scripts;C:\Users\Dusha\AppData\Local\Programs\Python\Pytho
+                          n312;C:\Users\Dusha\AppData\Local\Programs\Python\Launcher;C:\Users\Du
+                          sha\AppData\Local\Microsoft\WindowsApps;C:\Users\Dusha\AppData\Local\P
+                          rograms\Ollama;C:\Users\Dusha\AppData\Local\Programs\cursor\resources\
+                          app\bin;C:\Users\Dusha\AppData\Roaming\npm;C:\Users\Dusha\AppData\Loca
+                          l\Programs\Windsurf\bin;C:\Users\Dusha\ngrok\ngrok.exe;C:\Program
+                          Files\Git\usr\bin;C:\Users\Dusha\AppData\Local\Programs\Microsoft VS C
+                          ode\bin;C:\ngrok;C:\ngrok;C:\Users\Dusha\AppData\Local\Programs\Tesser
+                          act-OCR;C:\Users\Dusha\OneDrive\Desktop\Python
+                          Projects\FileBot\poppler-25.07.0\Library\bin;.;C:\Program
+                          Files\Git\usr\bin\vendor_perl;C:\Program Files\Git\usr\bin\core_perl
+          PKG_CONFIG_PATH=C:\Program Files\Git\mingw64\lib\pkgconfig;C:\Program
+                          Files\Git\mingw64\share\pkgconfig
+PKG_CONFIG_SYSTEM_INCLUDE_PATH=C:/Program Files/Git/mingw64/include
+PKG_CONFIG_SYSTEM_LIBRARY_PATH=C:/Program Files/Git/mingw64/lib
+             PSMODULEPATH=C:\Users\Dusha\OneDrive\Documents\WindowsPowerShell\Modules;C:\Program
+                          Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\
+                          v1.0\Modules
+       REQUESTS_CA_BUNDLE=<not set>
+            SSL_CERT_FILE=C:\Users\Dusha\anaconda3\Library\ssl\cacert.pem
+
+     active environment : base
+    active env location : C:\Users\Dusha\anaconda3
+            shell level : 1
+       user config file : C:\Users\Dusha\.condarc
+ populated config files : C:\Users\Dusha\.condarc
+          conda version : 25.1.1
+    conda-build version : 24.5.1
+         python version : 3.12.3.final.0
+                 solver : libmamba (default)
+       virtual packages : __archspec=1=icelake
+                          __conda=25.1.1=0
+                          __win=10.0.26200=0
+       base environment : C:\Users\Dusha\anaconda3  (writable)
+      conda av data dir : C:\Users\Dusha\anaconda3\etc\conda
+  conda av metadata url : None
+           channel URLs : https://repo.anaconda.com/pkgs/main/win-64
+                          https://repo.anaconda.com/pkgs/main/noarch
+                          https://repo.anaconda.com/pkgs/r/win-64
+                          https://repo.anaconda.com/pkgs/r/noarch
+                          https://repo.anaconda.com/pkgs/msys2/win-64
+                          https://repo.anaconda.com/pkgs/msys2/noarch
+          package cache : C:\Users\Dusha\anaconda3\pkgs
+                          C:\Users\Dusha\.conda\pkgs
+                          C:\Users\Dusha\AppData\Local\conda\conda\pkgs
+       envs directories : C:\Users\Dusha\anaconda3\envs
+                          C:\Users\Dusha\.conda\envs
+                          C:\Users\Dusha\AppData\Local\conda\conda\envs
+               platform : win-64
+             user-agent : conda/25.1.1 requests/2.32.3 CPython/3.12.3 Windows/11 Windows/10.0.26200 solver/libmamba conda-libmamba-solver/24.1.0 libmambapy/1.5.8
+          administrator : False
+             netrc file : None
+           offline mode : False
+
+
+An unexpected error has occurred. Conda has prepared the above report.
+If you suspect this error is being caused by a malfunctioning plugin,
+consider using the --no-plugins option to turn off plugins.
+
+Example: conda --no-plugins install <package>
+
+Alternatively, you can set the CONDA_NO_PLUGINS environment variable on
+the command line to run the command without plugins enabled.
+
+Example: CONDA_NO_PLUGINS=true conda install <package>
+
+If submitted, this report will be used by core maintainers to improve
+future releases of conda.
+Would you like conda to send this report to the core maintainers? [y/N]: 

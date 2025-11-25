@@ -48,7 +48,7 @@ class DocuWareConnector(BaseConnector):
         Clear all cached data (cabinets, session, credentials).
         Called when configuration is cleared or account changes.
         """
-        print(f"\n🗑️  Clearing DocuWare connector cache")
+        print(f"\n[CLEAR] Clearing DocuWare connector cache")
         print(f"   Clearing session, client, and all cached data")
         logger.info("Clearing DocuWare connector cache")
 
@@ -60,7 +60,7 @@ class DocuWareConnector(BaseConnector):
         self.last_auth_attempt = None
         self.auth_failure_count = 0
 
-        print(f"   ✅ Cache cleared - ready for new configuration\n")
+        print(f"   [OK] Cache cleared - ready for new configuration\n")
 
     def _is_system_field(self, field_name: str) -> bool:
         """
@@ -244,14 +244,14 @@ class DocuWareConnector(BaseConnector):
                 time_since_last = time.time() - self.last_auth_attempt
                 if time_since_last < 3.0:  # Minimum 3 seconds between test attempts
                     sleep_time = 3.0 - time_since_last
-                    print(f"⏳ Waiting {sleep_time:.1f}s before testing (prevents account lockout)")
+                    print(f"[WAIT] Waiting {sleep_time:.1f}s before testing (prevents account lockout)")
                     logger.warning(f"Throttling test connection (sleeping {sleep_time:.1f}s)")
                     time.sleep(sleep_time)
 
             self.last_auth_attempt = time.time()
 
             # Create client and store it so we can reuse the session
-            print(f"🔐 Testing connection to DocuWare...")
+            print(f"[AUTH] Testing connection to DocuWare...")
             logger.info("Testing connection to DocuWare")
             self.client = docuware.DocuwareClient(server_url)
 
@@ -259,13 +259,13 @@ class DocuWareConnector(BaseConnector):
             self.session = self.client.login(username, password)
 
             if self.session:
-                print(f"   ✅ Connected successfully - session saved for reuse")
-                logger.info("✓ Connected successfully with OAuth2")
+                print(f"   [OK] Connected successfully - session saved for reuse")
+                logger.info("[OK] Connected successfully with OAuth2")
                 self.auth_failure_count = 0  # Reset on success
                 return True, "Connected successfully"
             else:
                 self.auth_failure_count += 1
-                print(f"   ❌ Login failed")
+                print(f"   [FAIL] Login failed")
                 return False, "Login failed"
 
         except Exception as e:
@@ -321,8 +321,8 @@ class DocuWareConnector(BaseConnector):
 
             # If we have a valid session and credentials haven't changed, reuse it!
             if self._has_valid_session() and not credentials_changed:
-                logger.info("♻️  Reusing existing authenticated session")
-                print(f"   ♻️  Reusing existing authenticated session")
+                logger.info("[REUSE] Reusing existing authenticated session")
+                print(f"   [REUSE] Reusing existing authenticated session")
                 return self.session
 
             # If credentials changed, clear the cache and reset failure counter
@@ -334,7 +334,7 @@ class DocuWareConnector(BaseConnector):
 
             # Check if we've had too many recent failures (possible account lockout)
             if self.auth_failure_count >= 3:
-                print(f"⛔ Authentication blocked after {self.auth_failure_count} consecutive failures - your DocuWare account may be locked!")
+                print(f"[BLOCKED] Authentication blocked after {self.auth_failure_count} consecutive failures - your DocuWare account may be locked!")
                 logger.error(f"Authentication blocked after {self.auth_failure_count} consecutive failures - account may be locked")
                 return None
 
@@ -347,7 +347,7 @@ class DocuWareConnector(BaseConnector):
                     time.sleep(sleep_time)
 
             self.last_auth_attempt = time.time()
-            print(f"🔐 Authenticating to DocuWare (attempt {self.auth_failure_count + 1})...")
+            print(f"[AUTH] Authenticating to DocuWare (attempt {self.auth_failure_count + 1})...")
             logger.info(f"Authenticating to DocuWare (attempt {self.auth_failure_count + 1})")
 
             # Only create a new client if we don't have one or credentials changed
@@ -361,13 +361,13 @@ class DocuWareConnector(BaseConnector):
 
             # Reset failure counter on success
             self.auth_failure_count = 0
-            print(f"   ✅ Authentication successful")
+            print(f"   [OK] Authentication successful")
             logger.info("Authentication successful")
             return self.session
 
         except Exception as e:
             self.auth_failure_count += 1
-            print(f"   ❌ Auth error (failure #{self.auth_failure_count}): {e}")
+            print(f"   [ERROR] Auth error (failure #{self.auth_failure_count}): {e}")
             logger.error(f"Auth error (failure #{self.auth_failure_count}): {e}")
             return None
 
@@ -1038,7 +1038,7 @@ class DocuWareConnector(BaseConnector):
                 root = ET.fromstring(response.text)
                 # Extract Id attribute
                 document_id = root.get('Id')
-                print(f"      📄 Document uploaded, ID: {document_id}")
+                print(f"      [DOC] Document uploaded, ID: {document_id}")
                 logger.debug(f"Uploaded document, got ID: {document_id}")
             except Exception as e:
                 logger.warning(f"Could not parse XML response: {e}")
@@ -1088,7 +1088,7 @@ class DocuWareConnector(BaseConnector):
 
                         if table_data:
                             fields_payload["Field"].append(table_data)
-                            logger.debug(f"✓ Built table field {table_field_name} with {len(line_items)} rows")
+                            logger.debug(f"[OK] Built table field {table_field_name} with {len(line_items)} rows")
 
                 # Update document fields
                 headers = {
@@ -1104,11 +1104,11 @@ class DocuWareConnector(BaseConnector):
 
                 logger.debug(f"Index update response status: {update_response.status_code}")
                 if update_response.status_code not in [200, 201, 204]:
-                    print(f"      ❌ Index update failed: {update_response.text}")
+                    print(f"      [ERROR] Index update failed: {update_response.text}")
                     logger.error(f"Index update failed: {update_response.text}")
                 else:
-                    print(f"      ✅ Index fields updated")
-                    logger.debug("✓ Index fields updated successfully")
+                    print(f"      [OK] Index fields updated")
+                    logger.debug("[OK] Index fields updated successfully")
 
             return {
                 "success": True,

@@ -93,6 +93,13 @@ async def test_docuware_connection(credentials: DocuWareCredentials):
         ConnectorTestResponse with success status and message
     """
     try:
+        # Check if DocuWare connector is available
+        if docuware_connector is None:
+            return ConnectorTestResponse(
+                success=False,
+                message="DocuWare connector is not available. The DocuWare Python package is not installed. Please contact support for installation assistance."
+            )
+
         creds_dict = credentials.dict()
         success, message = await docuware_connector.test_connection(creds_dict)
 

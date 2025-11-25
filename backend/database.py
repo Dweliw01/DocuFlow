@@ -55,7 +55,10 @@ async def init_database():
                 subscription_plan TEXT DEFAULT 'trial',
                 billing_email TEXT,
                 status TEXT DEFAULT 'active',
-                metadata TEXT
+                metadata TEXT,
+                review_mode TEXT DEFAULT 'review_all',
+                confidence_threshold REAL DEFAULT 0.85,
+                auto_upload_enabled BOOLEAN DEFAULT 0
             )
         """)
 
@@ -109,6 +112,9 @@ async def init_database():
                 connector_type TEXT NOT NULL,
                 config_encrypted TEXT NOT NULL,
                 is_active BOOLEAN DEFAULT TRUE,
+                review_mode TEXT DEFAULT 'review_all',
+                confidence_threshold REAL DEFAULT 0.85,
+                auto_upload_enabled BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 created_by_user_id INTEGER,
@@ -154,6 +160,7 @@ async def init_database():
                 billing_cycle_start DATE,
                 current_period_start DATE,
                 current_period_end DATE,
+                trial_end_date TIMESTAMP,
                 status TEXT DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -195,6 +202,51 @@ async def init_database():
             )
         """)
 
+        # Document metadata table (for review workflow)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS document_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL,
+                batch_id VARCHAR(36),
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                category TEXT NOT NULL,
+                extracted_data TEXT,
+                status TEXT DEFAULT 'pending_review',
+                confidence_score REAL,
+                connector_type TEXT,
+                connector_config_snapshot TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_at TIMESTAMP,
+                reviewed_by_user_id INTEGER,
+                approved_at TIMESTAMP,
+                uploaded_at TIMESTAMP,
+                uploaded_to_connector BOOLEAN DEFAULT 0,
+                error_message TEXT,
+                FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+        """)
+
+        # Field corrections table (for AI learning)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS field_corrections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL,
+                document_id INTEGER NOT NULL,
+                field_name TEXT NOT NULL,
+                original_value TEXT,
+                corrected_value TEXT NOT NULL,
+                original_confidence REAL,
+                correction_method TEXT DEFAULT 'manual',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by TEXT,
+                FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                FOREIGN KEY (document_id) REFERENCES document_metadata(id) ON DELETE CASCADE
+            )
+        """)
+
         # ====================================================================
         # INDEXES
         # ====================================================================
@@ -232,6 +284,17 @@ async def init_database():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_connector_configs_user_id ON connector_configs(user_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_connector_configs_type ON connector_configs(connector_type)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_field_mappings_config_id ON field_mappings(connector_config_id)")
+
+        # Document metadata indexes
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_document_metadata_org_id ON document_metadata(organization_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_document_metadata_batch_id ON document_metadata(batch_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_document_metadata_status ON document_metadata(status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_document_metadata_processed_at ON document_metadata(processed_at)")
+
+        # Field corrections indexes
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_corrections_doc ON field_corrections(document_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_corrections_org ON field_corrections(organization_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_corrections_field ON field_corrections(field_name)")
 
         await db.commit()
         logger.info("Database initialized successfully with multi-tenant support")

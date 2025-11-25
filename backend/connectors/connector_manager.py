@@ -9,11 +9,19 @@ import logging
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from models import ConnectorType, ConnectorConfig, ExtractedData, UploadResult, DocumentCategory
-from connectors.docuware_connector import DocuWareConnector
-from connectors.google_drive_connector import GoogleDriveConnector
-
 logger = logging.getLogger(__name__)
+
+from models import ConnectorType, ConnectorConfig, ExtractedData, UploadResult, DocumentCategory
+
+# Import connectors - make docuware optional since it requires external package
+try:
+    from connectors.docuware_connector import DocuWareConnector
+    DOCUWARE_AVAILABLE = True
+except ImportError:
+    logger.warning("DocuWare connector not available - missing docuware package")
+    DOCUWARE_AVAILABLE = False
+
+from connectors.google_drive_connector import GoogleDriveConnector
 
 
 class ConnectorManager:
@@ -24,7 +32,7 @@ class ConnectorManager:
 
     def __init__(self):
         """Initialize connector manager with available connectors."""
-        self.docuware_connector = DocuWareConnector()
+        self.docuware_connector = DocuWareConnector() if DOCUWARE_AVAILABLE else None
         self.google_drive_connector = GoogleDriveConnector()
         # Future connectors:
         # self.onedrive_connector = OneDriveConnector()

@@ -5,13 +5,13 @@ Configures the web server, middleware, and routes.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from backend.routes import upload
-from backend.routes import connector_routes
-from backend.routes import auth_routes
-from backend.routes import organization_routes
-from backend.routes import document_routes
-from backend.config import settings
-from backend.database import init_database
+from routes import upload
+from routes import connector_routes
+from routes import auth_routes
+from routes import organization_routes
+from routes import document_routes
+from config import settings
+from database import init_database
 import os
 import logging
 import sys
@@ -47,11 +47,17 @@ app.include_router(document_routes.router, tags=["documents"])
 
 # Serve frontend static files (HTML, CSS, JS)
 # This must come LAST to avoid overriding API routes
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+# Check for Docker mount first, then fall back to local development path
+if os.path.exists("/frontend"):
+    frontend_path = "/frontend"  # Docker volume mount
+else:
+    frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")  # Local development
+
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+    print(f"[OK] Serving frontend from {frontend_path}")
 else:
-    print(f"⚠ Warning: Frontend directory not found at {frontend_path}")
+    print(f"[WARNING] Frontend directory not found at {frontend_path}")
 
 
 @app.get("/api/health")

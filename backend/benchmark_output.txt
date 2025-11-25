@@ -199,3 +199,7 @@ Example: CONDA_NO_PLUGINS=true conda install <package>
 If submitted, this report will be used by core maintainers to improve
 future releases of conda.
 Would you like conda to send this report to the core maintainers? [y/N]: 
+No report sent. To permanently opt-out, use
+
+    $ conda config --set report_errors false
+

@@ -190,8 +190,8 @@ class OCRService:
 
                 word_data = {
                     'text': data['text'][i],
-                    'x': data['left'][i],
-                    'y': data['top'][i],
+                    'left': data['left'][i] if 'left' in data else data['x'][i],
+                    'top': data['top'][i] if 'top' in data else data['y'][i],
                     'width': data['width'][i],
                     'height': data['height'][i],
                     'confidence': int(data['conf'][i])

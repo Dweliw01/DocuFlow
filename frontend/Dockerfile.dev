@@ -1,0 +1,14 @@
+# Development Dockerfile for Frontend
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy frontend files
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Simple HTTP server for static files
+CMD ["python", "-m", "http.server", "3000"]

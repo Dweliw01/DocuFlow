@@ -1248,8 +1248,8 @@ async function renderOCRTextLayer(page, scale, viewport) {
             wordSpan.style.cursor = 'text';
 
             // Optional: Add visual debugging (uncomment to see word boxes)
-            // wordSpan.style.border = '1px solid rgba(255, 0, 0, 0.3)';
-            // wordSpan.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
+            wordSpan.style.border = '1px solid rgba(255, 0, 0, 0.3)';
+            wordSpan.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
 
             textLayerDiv.appendChild(wordSpan);
         });

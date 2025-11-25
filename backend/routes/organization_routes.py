@@ -110,10 +110,18 @@ async def create_new_organization(
     """
     # Check if user already has an organization
     if current_user.get("organization_id"):
-        raise HTTPException(
-            status_code=400,
-            detail="User already belongs to an organization"
-        )
+        # User already has an organization - return it instead of erroring
+        # This allows the onboarding flow to be idempotent
+        logger.info(f"User {current_user['id']} already has organization {current_user['organization_id']}, returning existing")
+        existing_org = await get_organization(current_user["organization_id"])
+        if existing_org:
+            return Organization(**existing_org)
+        else:
+            # Organization not found but user has org_id - this is an error state
+            raise HTTPException(
+                status_code=500,
+                detail="User has organization_id but organization not found"
+            )
 
     try:
         # Create organization

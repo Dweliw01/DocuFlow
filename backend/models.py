@@ -270,6 +270,17 @@ class ProcessingStatus(str, Enum):
     FAILED = "failed"
 
 
+class UploadResult(BaseModel):
+    """
+    Result of uploading a document to a connector.
+    """
+    success: bool
+    document_id: Optional[str] = None
+    url: Optional[str] = None
+    message: str
+    error: Optional[str] = None
+
+
 class DocumentResult(BaseModel):
     """
     Result of processing a single document.
@@ -287,7 +298,7 @@ class DocumentResult(BaseModel):
     connector_config_snapshot: Optional[str] = None  # Connector config snapshot for historical field display
     error: Optional[str] = None
     processing_time: float  # seconds
-    upload_result: Optional['UploadResult'] = None  # Result of connector upload (if configured)
+    upload_result: Optional[UploadResult] = None  # Result of connector upload (if configured)
 
     class Config:
         """Allow enum values in JSON responses"""
@@ -477,14 +488,3 @@ class ConnectorTestResponse(BaseModel):
     """
     success: bool
     message: str
-
-
-class UploadResult(BaseModel):
-    """
-    Result of uploading a document to a connector.
-    """
-    success: bool
-    document_id: Optional[str] = None
-    url: Optional[str] = None
-    message: str
-    error: Optional[str] = None

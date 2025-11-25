@@ -258,7 +258,7 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
         file_paths: List of paths to uploaded PDF files
     """
     print(f"\n{'='*60}")
-    print(f"📦 Starting batch processing: {batch_id} (User: {user_id})")
+    print(f"[BATCH] Starting batch processing: {batch_id} (User: {user_id})")
     print(f"   Files to process: {len(file_paths)}")
     print(f"{'='*60}\n")
     logger.info(f"Starting batch processing: {batch_id} ({len(file_paths)} files) for user {user_id}")
@@ -426,9 +426,9 @@ async def process_batch(batch_id: str, user_id: int, file_paths: List[str]):
             logger.error(f"Failed to log usage: {str(e)}")
 
     print(f"\n{'='*60}")
-    print(f"✅ Batch processing completed: {batch_id}")
-    print(f"   ✓ Successful: {successful}")
-    print(f"   ✗ Failed: {failed}")
+    print(f"[OK] Batch processing completed: {batch_id}")
+    print(f"   [OK] Successful: {successful}")
+    print(f"   [FAIL] Failed: {failed}")
     print(f"{'='*60}\n")
     logger.info(f"Batch processing completed: {batch_id} ({successful} successful, {failed} failed)")
 
@@ -451,7 +451,7 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
     filename = os.path.basename(file_path)
 
     try:
-        print(f"⚙️  Processing: {filename}")
+        print(f"[PROCESS] Processing: {filename}")
         logger.info(f"Processing: {filename}")
 
         # Step 1: Extract text from file (supports PDFs and images)
@@ -563,8 +563,8 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
 
         processing_time = time.time() - start_time
 
-        print(f"   ✅ {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
-        logger.info(f"✓ {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
+        print(f"   [OK] {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
+        logger.info(f"[OK] {filename} -> {category.value} (confidence: {confidence:.2f}, time: {processing_time:.2f}s)")
 
         return DocumentResult(
             filename=filename,
@@ -581,8 +581,8 @@ async def process_single_document(file_path: str, user_id: int) -> DocumentResul
 
     except Exception as e:
         processing_time = time.time() - start_time
-        print(f"   ❌ {filename} failed: {str(e)}")
-        logger.error(f"✗ {filename} failed: {str(e)}")
+        print(f"   [ERROR] {filename} failed: {str(e)}")
+        logger.error(f"[ERROR] {filename} failed: {str(e)}")
 
         return DocumentResult(
             filename=filename,
@@ -620,7 +620,7 @@ async def upload_to_connector(results: List[DocumentResult], user_id: int):
         return
 
     print(f"\n{'='*60}")
-    print(f"📤 Uploading documents to {config.connector_type}")
+    print(f"[UPLOAD] Uploading documents to {config.connector_type}")
     print(f"{'='*60}\n")
     logger.info(f"Uploading documents to {config.connector_type}...")
 
@@ -633,7 +633,7 @@ async def upload_to_connector(results: List[DocumentResult], user_id: int):
 
         # Skip documents without extracted data
         if result.extracted_data is None:
-            print(f"   ⏭️  Skipping {result.filename} - no extracted data")
+            print(f"   [SKIP] Skipping {result.filename} - no extracted data")
             logger.debug(f"Skipping {result.filename} - no extracted data")
             continue
 
@@ -652,15 +652,15 @@ async def upload_to_connector(results: List[DocumentResult], user_id: int):
 
             if upload_result.success:
                 upload_count += 1
-                print(f"   ✅ Uploaded: {result.filename}")
-                logger.info(f"✓ Uploaded {result.filename} to {config.connector_type}")
+                print(f"   [OK] Uploaded: {result.filename}")
+                logger.info(f"[OK] Uploaded {result.filename} to {config.connector_type}")
             else:
-                print(f"   ❌ Upload failed: {result.filename} - {upload_result.error}")
-                logger.warning(f"✗ Failed to upload {result.filename}: {upload_result.error}")
+                print(f"   [ERROR] Upload failed: {result.filename} - {upload_result.error}")
+                logger.warning(f"[FAIL] Failed to upload {result.filename}: {upload_result.error}")
 
         except Exception as e:
-            print(f"   ❌ Upload error: {result.filename} - {str(e)}")
-            logger.error(f"✗ Upload error for {result.filename}: {str(e)}")
+            print(f"   [ERROR] Upload error: {result.filename} - {str(e)}")
+            logger.error(f"[ERROR] Upload error for {result.filename}: {str(e)}")
             result.upload_result = UploadResult(
                 success=False,
                 message="Upload error",
@@ -668,7 +668,7 @@ async def upload_to_connector(results: List[DocumentResult], user_id: int):
             )
 
     print(f"\n{'='*60}")
-    print(f"📊 Upload Summary")
+    print(f"[SUMMARY] Upload Summary")
     print(f"   Uploaded: {upload_count}/{len(results)} documents")
     print(f"{'='*60}\n")
     logger.info(f"Connector upload completed: {upload_count}/{len(results)} documents uploaded")

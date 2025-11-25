@@ -1,0 +1,97 @@
+
+services:
+  # PostgreSQL Database (runs on your machine)
+  postgres:
+    image: postgres:15-alpine
+    container_name: docuflow-postgres
+    environment:
+      POSTGRES_USER: docuflow
+      POSTGRES_PASSWORD: docuflow_dev_password
+      POSTGRES_DB: docuflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db_init/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docuflow-network
+
+  # Redis Cache (runs on your machine)
+  redis:
+    image: redis:7-alpine
+    container_name: docuflow-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docuflow-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: docuflow-backend
+    env_file:
+      - .env.docker
+    environment:
+      - DATABASE_URL=postgresql://docuflow:docuflow_dev_password@postgres:5432/docuflow
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount code for hot-reload
+      - ./backend:/app
+      - ./frontend:/frontend
+      - /app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - docuflow-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: docuflow-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: python -m http.server 3000
+    networks:
+      - docuflow-network
+    depends_on:
+      - backend
+
+# Data persistence volumes
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Network for service communication
+networks:
+  docuflow-network:
+    driver: bridge

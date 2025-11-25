@@ -1,7 +1,9 @@
 """
 Database connection and schema management for DocuFlow.
-Uses SQLite for MVP with async support via aiosqlite.
+Supports SQLite (development) and PostgreSQL (production) via DATABASE_URL.
+Uses Alembic for migrations in production.
 """
+import os
 import sqlite3
 try:
     import aiosqlite
@@ -15,22 +17,50 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Database file path
-DB_PATH = Path(__file__).parent.parent / "docuflow.db"
+# Get database configuration from environment
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./docuflow.db")
+
+# Determine database type and path
+if DATABASE_URL.startswith("sqlite"):
+    DB_TYPE = "sqlite"
+    # Extract path from sqlite URL
+    _db_path = DATABASE_URL.replace("sqlite:///", "").replace("sqlite://", "")
+    if not _db_path.startswith("/") and not _db_path.startswith("C:"):
+        # Relative path - resolve from backend directory
+        DB_PATH = Path(__file__).parent / _db_path.lstrip("./")
+    else:
+        DB_PATH = Path(_db_path)
+elif DATABASE_URL.startswith("postgresql"):
+    DB_TYPE = "postgresql"
+    DB_PATH = None  # Not used for PostgreSQL
+else:
+    raise ValueError(f"Unsupported DATABASE_URL: {DATABASE_URL}")
+
+logger.info(f"Database type: {DB_TYPE}, path: {DB_PATH}")
 
 
 def get_db_connection():
     """
-    Get a synchronous SQLite database connection.
+    Get a synchronous database connection.
     Used for non-async code paths like the review workflow.
+
+    For SQLite: Returns sqlite3.Connection with row factory enabled.
+    For PostgreSQL: Not supported (raises error) - use async get_db() instead.
 
     Returns:
         sqlite3.Connection: Database connection with row factory enabled
     """
+    if DB_TYPE == "postgresql":
+        raise RuntimeError(
+            "Synchronous connections not supported for PostgreSQL. "
+            "Use async get_db() instead or refactor to use asyncpg."
+        )
+
     conn = sqlite3.connect(str(DB_PATH), timeout=30.0)  # 30 second timeout
     conn.row_factory = sqlite3.Row
     # Enable WAL mode for better concurrent access
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
@@ -38,8 +68,17 @@ async def init_database():
     """
     Initialize database and create tables if they don't exist.
     This is called on application startup.
-    Includes both original tables and multi-tenant organization tables.
+
+    For SQLite: Creates tables using raw SQL (development mode).
+    For PostgreSQL: Skips - Alembic migrations handle schema (production mode).
     """
+    if DB_TYPE == "postgresql":
+        logger.info("PostgreSQL detected - skipping init_database() (use Alembic migrations)")
+        return
+
+    if aiosqlite is None:
+        raise RuntimeError("aiosqlite is required for SQLite database initialization")
+
     async with aiosqlite.connect(DB_PATH) as db:
         # Enable foreign keys
         await db.execute("PRAGMA foreign_keys = ON")
@@ -301,14 +340,24 @@ async def init_database():
 
 
 async def get_db() -> Any:
-    """Get database connection."""
-    if aiosqlite is None:
-        raise RuntimeError("aiosqlite is not installed. Please install it to use async database operations.")
-    db = await aiosqlite.connect(DB_PATH, timeout=30.0)
-    db.row_factory = aiosqlite.Row
-    await db.execute("PRAGMA foreign_keys = ON")
-    await db.execute("PRAGMA journal_mode=WAL")
-    return db
+    """
+    Get async database connection.
+
+    For SQLite: Returns aiosqlite connection (development).
+    For PostgreSQL: Returns DatabaseConnection wrapper from db_connection module (production).
+    """
+    if DB_TYPE == "sqlite":
+        if aiosqlite is None:
+            raise RuntimeError("aiosqlite is not installed. Please install it to use async database operations.")
+        db = await aiosqlite.connect(DB_PATH, timeout=30.0)
+        db.row_factory = aiosqlite.Row
+        await db.execute("PRAGMA foreign_keys = ON")
+        await db.execute("PRAGMA journal_mode=WAL")
+        return db
+    else:
+        # PostgreSQL - use the db_connection module
+        from db_connection import get_db_connection
+        return await get_db_connection()
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
 # 03: Database Migration - SQLite to PostgreSQL
 
-**Status:** 🟡 In Progress (70% Complete)
+**Status:** 🟡 In Progress (90% Complete)
 **Priority:** HIGH
 **Timeline:** Week 3-4
 **Dependencies:** 02_DOCKER_SETUP (PostgreSQL container)
@@ -33,12 +33,12 @@ Migrate DocuFlow from SQLite (development) to PostgreSQL (production) while main
 - [x] Create database connection abstraction (`db_connection.py`)
 - [x] Update `database.py` to support both SQLite and PostgreSQL
 - [x] Test migration runs successfully on SQLite
+- [x] Write data migration script (`migrations/migrate_sqlite_to_postgres.py`)
+- [x] Add PostgreSQL-specific indexes migration (`alembic/versions/add_postgres_indexes.py`)
 
 ### Remaining Tasks
 
-- [ ] Test with PostgreSQL database
-- [ ] Write data migration script (SQLite → PostgreSQL)
-- [ ] Add database indexes for performance (partial - basic indexes exist)
+- [ ] Test with PostgreSQL database (Docker)
 - [ ] Update repository/service code to use SQLAlchemy ORM (future)
 - [ ] Performance testing with PostgreSQL
 
@@ -169,6 +169,7 @@ alembic downgrade base
 | Revision | Description | Date |
 |----------|-------------|------|
 | `54c6d18ecdb8` | Initial schema with multi-tenant support | 2025-11-25 |
+| `pg_indexes_001` | PostgreSQL-specific performance indexes | 2025-11-25 |
 
 ---
 
@@ -269,12 +270,33 @@ cd backend
 alembic upgrade head
 ```
 
-### Step 4: Migrate Data (if needed)
+### Step 4: Migrate Data
 
 ```bash
-# TODO: Create data migration script
-python migrations/migrate_sqlite_to_postgres.py
+# Migrate data from SQLite to PostgreSQL
+python migrations/migrate_sqlite_to_postgres.py --postgres $DATABASE_URL
+
+# Or with explicit paths
+python migrations/migrate_sqlite_to_postgres.py \
+    --sqlite ./docuflow.db \
+    --postgres postgresql://docuflow:password@localhost:5432/docuflow
+
+# Options:
+#   --dry-run     Show what would be migrated without actually doing it
+#   --clear       Clear PostgreSQL tables before migration
+#   --verify-only Only verify row counts (no data transfer)
 ```
+
+#### Data Migration Script Features
+
+The `migrate_sqlite_to_postgres.py` script:
+
+- **Preserves IDs** - All primary keys kept intact for relationship integrity
+- **Dependency Order** - Tables migrated in correct order (parents first)
+- **Sequence Reset** - PostgreSQL sequences updated to continue from max ID
+- **Verification** - Automatic row count verification after migration
+- **Dry Run** - Preview migration without making changes
+- **Idempotent** - Can be run multiple times safely (ON CONFLICT DO NOTHING)
 
 ---
 
@@ -317,19 +339,34 @@ asyncio.run(test())
 
 ### Indexes
 
-The initial migration creates indexes for:
-- `organizations(status, created_at)`
-- `users(auth0_user_id, organization_id)`
-- `batches(user_id, organization_id, created_at)`
-- `document_metadata(organization_id, batch_id, status)`
-- And more...
+The initial migration creates basic indexes. The `pg_indexes_001` migration adds PostgreSQL-specific optimizations:
 
-### PostgreSQL-Specific Optimizations (TODO)
+#### Partial Indexes (Only index relevant rows)
 
-- [ ] Add GIN indexes for JSON columns
-- [ ] Configure connection pooling
+| Index | Table | Condition | Purpose |
+|-------|-------|-----------|---------|
+| `idx_organizations_active` | organizations | `status = 'active'` | Fast active org lookups |
+| `idx_batches_processing` | batches | `status = 'processing'` | Real-time status |
+| `idx_docs_pending_review` | document_metadata | `status = 'pending_review'` | Review queue |
+| `idx_docs_ready_upload` | document_metadata | `status = 'approved' AND uploaded = false` | Upload queue |
+| `idx_usage_unbilled` | usage_logs | `billed = false` | Billing queries |
+
+#### Composite Indexes (Multi-column for common queries)
+
+| Index | Table | Columns | Purpose |
+|-------|-------|---------|---------|
+| `idx_users_org_email` | users | `(organization_id, email)` | Org user lookups |
+| `idx_batches_user_recent` | batches | `(user_id, created_at DESC)` | User's recent batches |
+| `idx_docs_org_status_date` | document_metadata | `(org_id, status, processed_at DESC)` | Document filtering |
+| `idx_usage_billing` | usage_logs | `(org_id, billing_period, action_type)` | Billing reports |
+| `idx_corrections_learning` | field_corrections | `(org_id, field_name, created_at DESC)` | AI learning |
+
+### Future Optimizations
+
+- [ ] Configure connection pooling (PgBouncer)
 - [ ] Set up read replicas for scaling
 - [ ] Implement query caching with Redis
+- [ ] Add table partitioning for usage_logs (by billing_period)
 
 ---
 
